@@ -2,201 +2,210 @@ import pandas as pd
 import sqlite3
 import glob
 import os
-import re
+import requests
+import io
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# List of all ~230 UN ISO3 Country Codes (Abridged for brevity in code, but typically includes all ISO-3166-1 alpha-3 codes)
+ISO3_CODES = [
+    'AFG', 'ALB', 'DZA', 'AND', 'AGO', 'ATG', 'ARG', 'ARM', 'AUS', 'AUT', 'AZE', 'BHS', 'BHR', 'BGD', 'BRB', 'BLR', 'BEL', 'BLZ', 'BEN', 'BTN', 'BOL', 'BIH', 'BWA', 'BRA', 'BRN', 'BGR', 'BFA', 'BDI', 'CPV', 'KHM', 'CMR', 'CAN', 'CAF', 'TCD', 'CHL', 'CHN', 'COL', 'COM', 'COG', 'COD', 'CRI', 'CIV', 'HRV', 'CUB', 'CYP', 'CZE', 'DNK', 'DJI', 'DMA', 'DOM', 'ECU', 'EGY', 'SLV', 'GNQ', 'ERI', 'EST', 'SWZ', 'ETH', 'FJI', 'FIN', 'FRA', 'GAB', 'GMB', 'GEO', 'DEU', 'GHA', 'GRC', 'GRD', 'GTM', 'GIN', 'GNB', 'GUY', 'HTI', 'HND', 'HUN', 'ISL', 'IND', 'IDN', 'IRN', 'IRQ', 'IRL', 'ISR', 'ITA', 'JAM', 'JPN', 'JOR', 'KAZ', 'KEN', 'KIR', 'PRK', 'KOR', 'KWT', 'KGZ', 'LAO', 'LVA', 'LBN', 'LSO', 'LBR', 'LBY', 'LIE', 'LTU', 'LUX', 'MDG', 'MWI', 'MYS', 'MDV', 'MLI', 'MLT', 'MHL', 'MRT', 'MUS', 'MEX', 'FSM', 'MDA', 'MCO', 'MNG', 'MNE', 'MAR', 'MOZ', 'MMR', 'NAM', 'NRU', 'NPL', 'NLD', 'NZL', 'NIC', 'NER', 'NGA', 'MKD', 'NOR', 'OMN', 'PAK', 'PLW', 'PAN', 'PNG', 'PRY', 'PER', 'PHL', 'POL', 'PRT', 'QAT', 'ROU', 'RUS', 'RWA', 'KNA', 'LCA', 'VCT', 'WSM', 'SMR', 'STP', 'SAU', 'SEN', 'SRB', 'SYC', 'SLE', 'SGP', 'SVK', 'SVN', 'SLB', 'SOM', 'ZAF', 'SSD', 'ESP', 'LKA', 'SDN', 'SUR', 'SWE', 'CHE', 'SYR', 'TJK', 'TZA', 'THA', 'TLS', 'TGO', 'TON', 'TTO', 'TUN', 'TUR', 'TKM', 'TUV', 'UGA', 'UKR', 'ARE', 'GBR', 'USA', 'URY', 'UZB', 'VUT', 'VEN', 'VNM', 'YEM', 'ZMB', 'ZWE'
+]
+
+# List of 169 SDG Targets
+SDG_TARGETS = [
+    '1.1', '1.2', '1.3', '1.4', '1.5', '1.a', '1.b',
+    '2.1', '2.2', '2.3', '2.4', '2.5', '2.a', '2.b', '2.c',
+    '3.1', '3.2', '3.3', '3.4', '3.5', '3.6', '3.7', '3.8', '3.9', '3.a', '3.b', '3.c', '3.d',
+    '4.1', '4.2', '4.3', '4.4', '4.5', '4.6', '4.7', '4.a', '4.b', '4.c',
+    '5.1', '5.2', '5.3', '5.4', '5.5', '5.6', '5.a', '5.b', '5.c',
+    '6.1', '6.2', '6.3', '6.4', '6.5', '6.6', '6.a', '6.b',
+    '7.1', '7.2', '7.3', '7.a', '7.b',
+    '8.1', '8.2', '8.3', '8.4', '8.5', '8.6', '8.7', '8.8', '8.9', '8.10', '8.a', '8.b',
+    '9.1', '9.2', '9.3', '9.4', '9.5', '9.a', '9.b', '9.c',
+    '10.1', '10.2', '10.3', '10.4', '10.5', '10.6', '10.7', '10.a', '10.b', '10.c',
+    '11.1', '11.2', '11.3', '11.4', '11.5', '11.6', '11.7', '11.a', '11.b', '11.c',
+    '12.1', '12.2', '12.3', '12.4', '12.5', '12.6', '12.7', '12.8', '12.a', '12.b', '12.c',
+    '13.1', '13.2', '13.3', '13.a', '13.b',
+    '14.1', '14.2', '14.3', '14.4', '14.5', '14.6', '14.7', '14.a', '14.b', '14.c',
+    '15.1', '15.2', '15.3', '15.4', '15.5', '15.6', '15.7', '15.8', '15.9', '15.a', '15.b', '15.c',
+    '16.1', '16.2', '16.3', '16.4', '16.5', '16.6', '16.7', '16.8', '16.9', '16.10', '16.a', '16.b',
+    '17.1', '17.2', '17.3', '17.4', '17.5', '17.6', '17.7', '17.8', '17.9', '17.10', '17.11', '17.12', '17.13', '17.14', '17.15', '17.16', '17.17', '17.18', '17.19'
+]
 
 def initialize_database(db_path: str):
-    """
-    Connects to the database and performs a hard reset.
-    Creates a new sdg_global_data table with a strict UNIQUE constraint
-    to act as a duplicate detection method.
-    """
+    """Initializes the SQLite database and creates the sdg_global_data table."""
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
-    print("Performing hard database reset...")
+    logger.info("Initializing database...")
     cursor.execute("DROP TABLE IF EXISTS sdg_global_data")
     
-    # Create the table with UNIQUE constraint
     create_table_sql = """
     CREATE TABLE sdg_global_data (
         CountryCode TEXT,
-        CountryName TEXT,
+        SDG_Target TEXT,
         Year INTEGER,
         IndicatorValue REAL,
-        SDG_Target TEXT,
-        Source TEXT,
-        UNIQUE(CountryCode, Year, SDG_Target, Source)
+        UNIQUE(CountryCode, SDG_Target, Year)
     )
     """
     cursor.execute(create_table_sql)
     conn.commit()
     conn.close()
-    print("New sdg_global_data table created successfully.")
+    logger.info("Database initialized successfully.")
 
-
-def clean_and_harmonize_data(df: pd.DataFrame, source_name: str) -> pd.DataFrame:
+def fetch_owid_data() -> pd.DataFrame:
     """
-    Standardizes data into strict schema, handles 'melt' logic if years are columns,
-    normalizes country identities, drops duplicates in-memory, and interpolates missing values.
+    Fetches real data from the Our World in Data (OWID) repository.
+    Example uses OWID CO2 data mapped to SDG target 13.2 (Climate Action).
     """
-    if source_name == 'UN':
-        # Check if years are columns (e.g. '2015', '2016')
-        year_cols = [col for col in df.columns if str(col).isdigit()]
-        if year_cols:
-            id_vars = [col for col in df.columns if col not in year_cols]
-            df = df.melt(id_vars=id_vars, value_vars=year_cols, var_name='Year', value_name='IndicatorValue')
-            
-        # Standardize UN columns
-        df = df.rename(columns={
-            'GeoAreaCode': 'CountryCode', 
-            'GeoAreaName': 'CountryName',
-            'TimePeriod': 'Year', 
-            'Value': 'IndicatorValue',
-            'Target': 'SDG_Target',
-            'Country': 'CountryName'
-        })
-        if 'CountryCode' not in df.columns and 'CountryName' in df.columns:
-            df['CountryCode'] = df['CountryName'].str[:3].str.upper()
-            
-    elif source_name == 'WorldBank':
-        # Standardize World Bank columns
-        df = df.rename(columns={
-            'iso_code': 'CountryCode',
-            'country': 'CountryName',
-            'year': 'Year',
-            'value': 'IndicatorValue',
-            'target': 'SDG_Target'
-        })
+    logger.info("Fetching real OWID data from GitHub repository...")
+    url = "https://raw.githubusercontent.com/owid/co2-data/master/owid-co2-data.csv"
+    try:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        df = pd.read_csv(io.StringIO(response.text))
+        
+        # Standardize for the pipeline
+        df = df[['iso_code', 'year', 'co2']].copy()
+        df = df.rename(columns={'iso_code': 'CountryCode', 'year': 'Year', 'co2': 'IndicatorValue'})
+        df['SDG_Target'] = '13.2' # Mapping CO2 emissions to Target 13.2
+        
+        # Filter valid ISO3 codes and years
+        df = df[df['CountryCode'].notna() & (df['CountryCode'].str.len() == 3)]
+        df = df[df['Year'].between(2015, 2025)]
+        
+        logger.info(f"Fetched {len(df)} records from OWID.")
+        return df
+    except Exception as e:
+        logger.error(f"Failed to fetch OWID data: {e}")
+        return pd.DataFrame()
 
-    # Set Source
-    df['Source'] = source_name
+def process_un_data(raw_data_dir: str) -> list[pd.DataFrame]:
+    """Reads and parses all UN SDG .xlsx files from the raw_data directory."""
+    all_data = []
+    pattern = os.path.join(raw_data_dir, 'Goal*.xlsx')
+    files = sorted(glob.glob(pattern))
     
-    # Standardize to strict format
-    required_cols = ['CountryCode', 'CountryName', 'Year', 'IndicatorValue', 'SDG_Target', 'Source']
-    for col in required_cols:
-        if col not in df.columns:
-            df[col] = None
+    for file_path in files:
+        logger.info(f"Reading UN file: {os.path.basename(file_path)}")
+        try:
+            df = pd.read_excel(file_path)
             
-    df = df[required_cols].copy()
+            # Harmonize column names dynamically based on typical UN SDG file structures
+            col_map = {}
+            for col in df.columns:
+                col_str = str(col).lower()
+                if 'target' in col_str: col_map[col] = 'SDG_Target'
+                elif 'geoareacode' in col_str or 'countrycode' in col_str or 'iso3' in col_str: col_map[col] = 'CountryCode'
+                elif 'timeperiod' in col_str or 'year' in col_str: col_map[col] = 'Year'
+                elif 'value' in col_str: col_map[col] = 'IndicatorValue'
+                
+            if col_map:
+                df = df.rename(columns=col_map)
+                
+            required = ['CountryCode', 'SDG_Target', 'Year', 'IndicatorValue']
+            
+            # If the format is wide (years as columns), melt it
+            year_cols = [c for c in df.columns if str(c).isdigit() and 2015 <= int(c) <= 2025]
+            if year_cols and 'Year' not in df.columns:
+                id_vars = [c for c in df.columns if c not in year_cols]
+                df = df.melt(id_vars=id_vars, value_vars=year_cols, var_name='Year', value_name='IndicatorValue')
+                
+            if all(col in df.columns for col in required):
+                df = df[required].copy()
+                df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
+                df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
+                df['CountryCode'] = df['CountryCode'].astype(str)
+                df['SDG_Target'] = df['SDG_Target'].astype(str)
+                
+                df = df[df['Year'].between(2015, 2025)]
+                df = df.dropna(subset=['IndicatorValue'])
+                all_data.append(df)
+            else:
+                logger.warning(f"File {os.path.basename(file_path)} missing required columns. Skipping.")
+                
+        except Exception as e:
+            logger.error(f"Error processing {os.path.basename(file_path)}: {e}")
+            
+    return all_data
 
-    # Normalize country codes and names
-    country_mapping = {'US': 'USA', 'USA': 'USA', 'UK': 'GBR', 'GBR': 'GBR', 'IND': 'IND'}
-    name_mapping = {
-        'United States': 'United States', 'USA': 'United States', 
-        'United Kingdom': 'United Kingdom', 'Britain': 'United Kingdom', 'GBR': 'United Kingdom',
-        'India': 'India', 'IND': 'India'
-    }
-    df['CountryCode'] = df['CountryCode'].map(country_mapping).fillna(df['CountryCode']).astype(str)
-    df['CountryName'] = df['CountryName'].map(name_mapping).fillna(df['CountryName']).astype(str)
-
-    # Cast Data Types
-    df['Year'] = pd.to_numeric(df['Year'], errors='coerce').fillna(0).astype(int)
-    df['SDG_Target'] = df['SDG_Target'].astype(str)
-    df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce').astype('float32')
-
-    # Memory Duplicate Detection BEFORE DB Insertion
-    df = df.drop_duplicates(subset=['CountryCode', 'Year', 'SDG_Target', 'Source'])
-
-    # Handle missing NaN values via mathematical interpolation
-    df = df.sort_values(by=['CountryCode', 'SDG_Target', 'Year'])
-    df['IndicatorValue'] = df.groupby(['CountryCode', 'SDG_Target'])['IndicatorValue'].transform(
+def build_master_grid_and_load(all_dfs: list, db_path: str):
+    """
+    Creates a Cartesian Master Grid, merges actual data, imputes missing values, 
+    and saves to SQLite without dropping sparse rows.
+    """
+    logger.info("Concatenating all data sources...")
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    
+    # Deduplicate in case multiple files/sources provided the same country/target/year
+    combined_df = combined_df.groupby(['CountryCode', 'SDG_Target', 'Year'], as_index=False)['IndicatorValue'].mean()
+    
+    logger.info("Generating Cartesian Master Grid (ISO3 x Targets x Years)...")
+    years = list(range(2015, 2026))
+    
+    master_index = pd.MultiIndex.from_product(
+        [ISO3_CODES, SDG_TARGETS, years],
+        names=['CountryCode', 'SDG_Target', 'Year']
+    )
+    master_df = pd.DataFrame(index=master_index).reset_index()
+    
+    logger.info("Executing LEFT JOIN onto Master Grid...")
+    merged_df = pd.merge(master_df, combined_df, on=['CountryCode', 'SDG_Target', 'Year'], how='left')
+    
+    logger.info("Applying mathematically robust imputation (Linear Interpolate -> FFill -> BFill)...")
+    merged_df = merged_df.sort_values(by=['CountryCode', 'SDG_Target', 'Year'])
+    
+    # Impute missing values within each Country & Target group
+    merged_df['IndicatorValue'] = merged_df.groupby(['CountryCode', 'SDG_Target'])['IndicatorValue'].transform(
         lambda group: group.interpolate(method='linear', limit_direction='both')
     )
-    df['IndicatorValue'] = df.groupby(['CountryCode', 'SDG_Target'])['IndicatorValue'].bfill().ffill()
-
-    return df
-
-
-def safe_db_load(df: pd.DataFrame, db_path: str):
-    """
-    Writes the cleaned DataFrame to the SQLite database safely.
-    Uses a temporary table and INSERT OR IGNORE to respect the UNIQUE constraint
-    without crashing pandas.
-    """
-    conn = sqlite3.connect(db_path)
-    # Write to a temporary table
-    temp_table = 'temp_load_table'
-    df.to_sql(temp_table, conn, if_exists='replace', index=False)
+    # Forward fill then Backward fill for the remaining NaNs at the edges
+    merged_df['IndicatorValue'] = merged_df.groupby(['CountryCode', 'SDG_Target'])['IndicatorValue'].ffill().bfill()
     
-    # Insert or ignore into the final table
-    insert_sql = f"""
-    INSERT OR IGNORE INTO sdg_global_data (CountryCode, CountryName, Year, IndicatorValue, SDG_Target, Source)
-    SELECT CountryCode, CountryName, Year, IndicatorValue, SDG_Target, Source FROM {temp_table}
+    logger.info(f"Loading {len(merged_df)} rows into SQLite database...")
+    conn = sqlite3.connect(db_path)
+    # Using temp table for efficient insertion
+    merged_df.to_sql('temp_load_table', conn, if_exists='replace', index=False)
+    
+    insert_sql = """
+    INSERT OR REPLACE INTO sdg_global_data (CountryCode, SDG_Target, Year, IndicatorValue)
+    SELECT CountryCode, SDG_Target, Year, IndicatorValue FROM temp_load_table
     """
     cursor = conn.cursor()
     cursor.execute(insert_sql)
     conn.commit()
-    
-    # Drop temp table
-    cursor.execute(f"DROP TABLE {temp_table}")
+    cursor.execute("DROP TABLE temp_load_table")
     conn.commit()
     conn.close()
-
-
-def extract_goal_number(filename: str) -> int:
-    """Extracts the number from GoalX.xlsx for correct sequential sorting."""
-    match = re.search(r'Goal(\d+)', filename)
-    return int(match.group(1)) if match else 0
-
-
-def process_un_files(raw_data_dir: str, db_path: str):
-    """Processes UN Excel files sequentially."""
-    pattern = os.path.join(raw_data_dir, 'Goal*.xlsx')
-    files = glob.glob(pattern)
     
-    # Custom lambda key to sort exactly: Goal1, Goal2, ... Goal17
-    files = sorted(files, key=lambda x: extract_goal_number(os.path.basename(x)))
+    logger.info("Database loaded successfully.")
+
+def run_pipeline():
+    base_dir = os.path.dirname(__file__)
+    raw_data_dir = os.path.join(base_dir, "raw_data")
+    db_path = os.path.join(base_dir, 'sdg_database.db')
     
-    if not files:
-        print("No UN Excel files found.")
-        return
-
-    for file_path in files:
-        print(f"Processing UN file: {os.path.basename(file_path)}...")
-        try:
-            # We use a memory efficient usecols to prevent MemoryError
-            def usecols_func(col):
-                return col in ['Target', 'GeoAreaCode', 'GeoAreaName', 'TimePeriod', 'Value', 'Country', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025']
-            
-            df = pd.read_excel(file_path, usecols=usecols_func)
-            cleaned_df = clean_and_harmonize_data(df, source_name='UN')
-            safe_db_load(cleaned_df, db_path)
-            print(f" -> Successfully loaded {os.path.basename(file_path)}.")
-        except Exception as e:
-            print(f" -> Failed to process {os.path.basename(file_path)}: {e}")
-
-
-def process_worldbank_file(raw_data_dir: str, db_path: str):
-    """Processes the World Bank CSV file."""
-    file_path = os.path.join(raw_data_dir, 'worldbank_sdg.csv')
-    if not os.path.exists(file_path):
-        print(f"World Bank file not found at {file_path}. Skipping.")
-        return
+    initialize_database(db_path)
+    
+    all_data_frames = []
+    
+    # 1. Load local UN SDG .xlsx files
+    un_dfs = process_un_data(raw_data_dir)
+    all_data_frames.extend(un_dfs)
+    
+    # 2. Fetch and append real OWID data
+    owid_df = fetch_owid_data()
+    if not owid_df.empty:
+        all_data_frames.append(owid_df)
         
-    print(f"Processing World Bank file: {os.path.basename(file_path)}...")
-    try:
-        # For massive CSV files, we process in chunks to be memory-safe
-        chunks = pd.read_csv(file_path, chunksize=50000, low_memory=False)
-        for i, chunk in enumerate(chunks):
-            cleaned_chunk = clean_and_harmonize_data(chunk, source_name='WorldBank')
-            safe_db_load(cleaned_chunk, db_path)
-            print(f" -> Successfully loaded World Bank chunk {i+1}.")
-    except Exception as e:
-        print(f" -> Failed to process World Bank data: {e}")
-
+    if all_data_frames:
+        build_master_grid_and_load(all_data_frames, db_path)
+    else:
+        logger.error("No data processed. Pipeline aborted.")
 
 if __name__ == "__main__":
-    print("Starting finalized Module 1: Data Pipeline & Preprocessing Engine...")
-    
-    RAW_DATA_DIR = os.path.join(os.path.dirname(__file__), "raw_data")
-    DB_FILE = os.path.join(os.path.dirname(__file__), 'sdg_database.db')
-    
-    # 1. Hard Database Reset
-    initialize_database(DB_FILE)
-    
-    # 2. Process Data Sources
-    process_un_files(RAW_DATA_DIR, DB_FILE)
-    process_worldbank_file(RAW_DATA_DIR, DB_FILE)
-    
-    print("\nData Pipeline execution fully complete.")
+    run_pipeline()
