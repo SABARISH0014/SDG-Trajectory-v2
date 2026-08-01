@@ -3,43 +3,56 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.linear_model import LinearRegression
 import logging
-
-logger = logging.getLogger(__name__)
-
-def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Uses IsolationForest to detect and remove anomalous data points.
-    Safety check: If len(df) < 4, skip anomaly detection to prevent crashes.
-    """
-    if len(df) < 4:
-        return df
-        
-    try:
-        # Reshape for sklearn
-        X = df[['IndicatorValue']].values
-        iso_forest = IsolationForest(contamination=0.1, random_state=42)
-        preds = iso_forest.fit_predict(X)
-        
-        # Keep only inliers (preds == 1)
-        filtered_df = df[preds == 1].copy()
-        logger.info(f"Anomaly detection removed {len(df) - len(filtered_df)} outliers.")
-        return filtered_df
-    except Exception as e:
-        logger.error(f"Anomaly detection failed: {e}")
-        return df
-
 import os
-import requests
+import httpx
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
 
-def generate_narrative(stats: dict) -> str:
+logger = logging.getLogger(__name__)
+
+def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Uses OpenRouter API to generate a professional 2-sentence summary of the trajectory.
-    Implements a fallback cascade: tries multiple free models before defaulting to a hardcoded string.
+    Uses IsolationForest to detect and remove anomalous data points.
+    Safety feature: Ensures the most recent chronological data point is never removed
+    so we don't skew the endpoint of the trajectory.
+    Skips if len(df) < 4.
+    """
+    if len(df) < 4:
+        return df
+        
+    try:
+        # Sort chronologically
+        df = df.sort_values(by='Year').copy()
+        
+        # Reshape for sklearn
+        X = df[['IndicatorValue']].values
+        iso_forest = IsolationForest(contamination=0.1, random_state=42)
+        preds = iso_forest.fit_predict(X)
+        
+        # Add prediction back to df
+        df['IsOutlier'] = (preds == -1)
+        
+        # CRITICAL SAFETY: Protect the most recent year from being dropped
+        latest_year = df['Year'].max()
+        df.loc[df['Year'] == latest_year, 'IsOutlier'] = False
+        
+        # Keep only inliers
+        filtered_df = df[~df['IsOutlier']].copy()
+        
+        logger.info(f"Anomaly detection removed {len(df) - len(filtered_df)} outliers.")
+        return filtered_df.drop(columns=['IsOutlier'])
+    except Exception as e:
+        logger.error(f"Anomaly detection failed: {e}")
+        return df
+
+async def generate_narrative(stats: dict) -> str:
+    """
+    Uses OpenRouter API asynchronously to generate a 2-sentence summary of the trajectory.
+    Does NOT block the ASGI event loop, preventing FastAPI from hanging.
     """
     status = stats.get('status', 'Unknown')
     baseline = stats.get('baseline_value', 'N/A')
@@ -54,34 +67,18 @@ def generate_narrative(stats: dict) -> str:
     if not api_key:
         logger.warning("OPENROUTER_API_KEY not found. Using fallback narrative.")
         return fallback_narrative
-
-    # --- THE FALLBACK CASCADE ---
-    # A list of highly reliable, free OpenRouter models to try in order
-    free_models = [
-        # 1. High Quality General Drafting
-        "meta-llama/llama-3.3-70b-instruct:free",
         
-        # 2. Strong Multilingual/Instruction
-        "google/gemma-4-31b-it:free",
-        
-        # 3. Fast & Lightweight Reasoning
-        "openai/gpt-oss-20b:free",
-        
-        # 4. OpenRouter Automatic Rotation (If all specific models fail)
-        "openrouter/free"
-    ]
-        
-    for model_name in free_models:
-        try:
-            logger.info(f"Attempting to generate narrative with model: {model_name}")
-            response = requests.post(
+    try:
+        # ASYNC HTTP call to prevent server blocking
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
                 url="https://openrouter.ai/api/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": model_name, 
+                    "model": "google/gemma-4-26b-a4b-it:free",
                     "messages": [
                         {
                             "role": "system",
@@ -92,45 +89,45 @@ def generate_narrative(stats: dict) -> str:
                             "content": f"The SDG target trajectory is currently '{status}'. It moves from a baseline value of {baseline:.2f} to a projected 2030 value of {projection:.2f}."
                         }
                     ]
-                },
-                timeout=10
+                }
             )
-            
-            # If the request fails (like a 402 or 500 error), this will trigger the except block
-            response.raise_for_status() 
-            
+            response.raise_for_status()
             data = response.json()
-            
-            # If successful, return the narrative immediately and break the loop
             return data["choices"][0]["message"]["content"].strip()
-            
-        except Exception as e:
-            # Log the specific model failure, but don't crash. The loop will continue to the next model.
-            logger.warning(f"Model {model_name} failed: {e}. Trying next model in cascade...")
-            continue
+    except httpx.ReadTimeout:
+        logger.error("OpenRouter API call timed out. Falling back.")
+        return fallback_narrative
+    except Exception as e:
+        logger.error(f"OpenRouter API call failed: {e}")
+        return fallback_narrative
 
-    # If the loop finishes and ALL models failed, rely on our rock-solid hardcoded text
-    logger.error("All OpenRouter free models failed or timed out. Falling back to hardcoded text.")
-    return fallback_narrative
-
-def classify_status(baseline_value: float, projected_value: float) -> str:
+def classify_status(baseline_value: float, projected_value: float, sdg_target: str) -> str:
     """
-    Classifies the progress status based on baseline vs projection.
-    This is a generalized logic (assuming higher is better for this placeholder).
-    In a real-world scenario, the logic would vary per SDG target directionality.
+    Classifies the progress status based on baseline vs projection and target polarity.
     """
-    # Assuming positive growth is on-track for simplicity
-    if projected_value > baseline_value * 1.05:
-        return "On-track"
-    elif baseline_value * 0.95 <= projected_value <= baseline_value * 1.05:
-        return "At-risk"
+    # Negative polarity targets (lower value is better, e.g. Mortality, CO2 emissions)
+    NEGATIVE_POLARITY_TARGETS = ['1.1', '1.2', '2.1', '3.1', '3.2', '13.2']
+    
+    if str(sdg_target) in NEGATIVE_POLARITY_TARGETS:
+        if projected_value < baseline_value * 0.95:
+            return "On-track"
+        elif baseline_value * 0.95 <= projected_value <= baseline_value * 1.05:
+            return "At-risk"
+        else:
+            return "Off-track"
     else:
-        return "Off-track"
+        if projected_value > baseline_value * 1.05:
+            return "On-track"
+        elif baseline_value * 0.95 <= projected_value <= baseline_value * 1.05:
+            return "At-risk"
+        else:
+            return "Off-track"
 
-def train_and_predict(df: pd.DataFrame, policy_multiplier: float = 1.0) -> dict:
+async def train_and_predict(df: pd.DataFrame, sdg_target: str, policy_multiplier: float = 1.0) -> dict:
     """
     Trains a LinearRegression model to predict values for 2026-2030.
     Applies sparse data bypass if data is insufficient.
+    NOTE: Now an async function because it awaits generate_narrative.
     """
     # Sparse Data Bypass (CRITICAL)
     if df.empty or len(df.dropna()) < 2:
@@ -141,55 +138,41 @@ def train_and_predict(df: pd.DataFrame, policy_multiplier: float = 1.0) -> dict:
             "ai_narrative": "Not enough historical data available to generate a 2030 trajectory."
         }
     
-    # Pre-processing
     df = df.dropna(subset=['IndicatorValue', 'Year']).copy()
     
-    # Anomaly Detection
+    # Safe Anomaly Detection
     clean_df = filter_outliers(df)
     
-    # Prepare features and target
     X_train = clean_df[['Year']].values
     y_train = clean_df['IndicatorValue'].values
     
-    # Train Model
     model = LinearRegression()
     model.fit(X_train, y_train)
     
-    # Forecast 2026-2030
-    future_years = np.array(range(2026, 2031)).reshape(-1, 1)
-    
-    # Apply policy impact multiplier to the slope (rate of change)
     original_coef = model.coef_[0]
     modified_coef = original_coef * policy_multiplier
     
-    # Calculate predictions using the potentially modified slope
-    # y = mx + c => c = y_mean - m * x_mean (from original model)
-    intercept = model.intercept_
-    
     predictions = []
     for year in range(2026, 2031):
-        # We project from the last known point or mean, but mathematically standard is:
-        # predicted = (year - train_mean_x) * modified_coef + train_mean_y
-        # Which is equivalent to intercept + year * modified_coef if intercept is adjusted.
-        # Let's adjust intercept for the new slope so it pivots around the last known point (2025).
-        # But for simplicity and to match standard linear formula:
         if policy_multiplier != 1.0:
             last_year = X_train[-1][0]
             last_value = model.predict([[last_year]])[0]
-            # y_new - y_last = m_new * (x_new - x_last)
             pred_val = last_value + modified_coef * (year - last_year)
         else:
             pred_val = model.predict([[year]])[0]
             
+        # Mathematical constraint: Floor prediction at 0
+        pred_val = max(0.0, float(pred_val))
+            
         predictions.append({
             "Year": year,
-            "PredictedValue": float(pred_val)
+            "PredictedValue": pred_val
         })
         
     baseline_val = float(y_train[0])
     projection_2030 = float(predictions[-1]['PredictedValue'])
     
-    status = classify_status(baseline_val, projection_2030)
+    status = classify_status(baseline_val, projection_2030, sdg_target)
     
     stats = {
         "status": status,
@@ -197,7 +180,8 @@ def train_and_predict(df: pd.DataFrame, policy_multiplier: float = 1.0) -> dict:
         "projected_value_2030": projection_2030
     }
     
-    narrative = generate_narrative(stats)
+    # Await the async API call
+    narrative = await generate_narrative(stats)
     
     return {
         "predictions": predictions,

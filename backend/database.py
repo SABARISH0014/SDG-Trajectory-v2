@@ -2,6 +2,7 @@ import sqlite3
 import pandas as pd
 import os
 import logging
+from contextlib import closing
 
 logger = logging.getLogger(__name__)
 
@@ -51,15 +52,14 @@ def query_database(country_code: str, sdg_target: str) -> pd.DataFrame:
         return pd.DataFrame()
         
     try:
-        conn = sqlite3.connect(db_path)
-        query = """
-        SELECT Year, IndicatorValue 
-        FROM sdg_global_data 
-        WHERE CountryCode = ? AND SDG_Target = ?
-        ORDER BY Year ASC
-        """
-        df = pd.read_sql_query(query, conn, params=(db_country, db_target))
-        conn.close()
+        with closing(sqlite3.connect(db_path)) as conn:
+            query = """
+            SELECT Year, IndicatorValue 
+            FROM sdg_global_data 
+            WHERE CountryCode = ? AND SDG_Target = ?
+            ORDER BY Year ASC
+            """
+            df = pd.read_sql_query(query, conn, params=(db_country, db_target))
         
         # Ensure correct types
         if not df.empty:

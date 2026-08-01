@@ -1,7 +1,9 @@
-fastapi==0.139.2
-uvicorn==0.51.0
-pandas==3.0.3
-scikit-learn==1.9.0
-requests==2.34.2
-python-dotenv==1.2.2
-pydantic==2.13.4
+pandas
+scikit-learn
+fastapi
+uvicorn
+pydantic
+requests
+python-dotenv
+pycountry
+httpx
