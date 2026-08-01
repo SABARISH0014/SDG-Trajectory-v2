@@ -5,14 +5,13 @@ import os
 import requests
 import io
 import logging
+import pycountry
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# List of all ~230 UN ISO3 Country Codes (Abridged for brevity in code, but typically includes all ISO-3166-1 alpha-3 codes)
-ISO3_CODES = [
-    'AFG', 'ALB', 'DZA', 'AND', 'AGO', 'ATG', 'ARG', 'ARM', 'AUS', 'AUT', 'AZE', 'BHS', 'BHR', 'BGD', 'BRB', 'BLR', 'BEL', 'BLZ', 'BEN', 'BTN', 'BOL', 'BIH', 'BWA', 'BRA', 'BRN', 'BGR', 'BFA', 'BDI', 'CPV', 'KHM', 'CMR', 'CAN', 'CAF', 'TCD', 'CHL', 'CHN', 'COL', 'COM', 'COG', 'COD', 'CRI', 'CIV', 'HRV', 'CUB', 'CYP', 'CZE', 'DNK', 'DJI', 'DMA', 'DOM', 'ECU', 'EGY', 'SLV', 'GNQ', 'ERI', 'EST', 'SWZ', 'ETH', 'FJI', 'FIN', 'FRA', 'GAB', 'GMB', 'GEO', 'DEU', 'GHA', 'GRC', 'GRD', 'GTM', 'GIN', 'GNB', 'GUY', 'HTI', 'HND', 'HUN', 'ISL', 'IND', 'IDN', 'IRN', 'IRQ', 'IRL', 'ISR', 'ITA', 'JAM', 'JPN', 'JOR', 'KAZ', 'KEN', 'KIR', 'PRK', 'KOR', 'KWT', 'KGZ', 'LAO', 'LVA', 'LBN', 'LSO', 'LBR', 'LBY', 'LIE', 'LTU', 'LUX', 'MDG', 'MWI', 'MYS', 'MDV', 'MLI', 'MLT', 'MHL', 'MRT', 'MUS', 'MEX', 'FSM', 'MDA', 'MCO', 'MNG', 'MNE', 'MAR', 'MOZ', 'MMR', 'NAM', 'NRU', 'NPL', 'NLD', 'NZL', 'NIC', 'NER', 'NGA', 'MKD', 'NOR', 'OMN', 'PAK', 'PLW', 'PAN', 'PNG', 'PRY', 'PER', 'PHL', 'POL', 'PRT', 'QAT', 'ROU', 'RUS', 'RWA', 'KNA', 'LCA', 'VCT', 'WSM', 'SMR', 'STP', 'SAU', 'SEN', 'SRB', 'SYC', 'SLE', 'SGP', 'SVK', 'SVN', 'SLB', 'SOM', 'ZAF', 'SSD', 'ESP', 'LKA', 'SDN', 'SUR', 'SWE', 'CHE', 'SYR', 'TJK', 'TZA', 'THA', 'TLS', 'TGO', 'TON', 'TTO', 'TUN', 'TUR', 'TKM', 'TUV', 'UGA', 'UKR', 'ARE', 'GBR', 'USA', 'URY', 'UZB', 'VUT', 'VEN', 'VNM', 'YEM', 'ZMB', 'ZWE'
-]
+# Dynamically extract all valid UN ISO3 Country Codes using pycountry
+ISO3_CODES = [country.alpha_3 for country in pycountry.countries]
 
 # List of 169 SDG Targets
 SDG_TARGETS = [
@@ -35,47 +34,70 @@ SDG_TARGETS = [
     '17.1', '17.2', '17.3', '17.4', '17.5', '17.6', '17.7', '17.8', '17.9', '17.10', '17.11', '17.12', '17.13', '17.14', '17.15', '17.16', '17.17', '17.18', '17.19'
 ]
 
-def initialize_database(db_path: str):
-    """Initializes the SQLite database and creates the sdg_global_data table."""
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    logger.info("Initializing database...")
-    cursor.execute("DROP TABLE IF EXISTS sdg_global_data")
+def standardize_country_code(raw_code: str) -> str:
+    """Uses pycountry to ensure strict ISO-3 validation or fuzzy matching."""
+    if pd.isna(raw_code):
+        return None
+        
+    raw_str = str(raw_code).strip().upper()
     
-    create_table_sql = """
-    CREATE TABLE sdg_global_data (
-        CountryCode TEXT,
-        SDG_Target TEXT,
-        Year INTEGER,
-        IndicatorValue REAL,
-        UNIQUE(CountryCode, SDG_Target, Year)
-    )
-    """
-    cursor.execute(create_table_sql)
-    conn.commit()
-    conn.close()
+    # Fast path if it's already a valid ISO3
+    if len(raw_str) == 3 and pycountry.countries.get(alpha_3=raw_str):
+        return raw_str
+        
+    # Try fuzzy matching if it's a name or full string
+    try:
+        results = pycountry.countries.search_fuzzy(raw_str)
+        if results:
+            return results[0].alpha_3
+    except LookupError:
+        pass
+        
+    return None
+
+def initialize_database(db_path: str):
+    """Initializes the SQLite database and creates the sdg_global_data table safely."""
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    logger.info("Initializing database...")
+    
+    # Safe Context Manager Implementation
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DROP TABLE IF EXISTS sdg_global_data")
+        
+        create_table_sql = """
+        CREATE TABLE sdg_global_data (
+            CountryCode TEXT,
+            SDG_Target TEXT,
+            Year INTEGER,
+            IndicatorValue REAL,
+            UNIQUE(CountryCode, SDG_Target, Year)
+        )
+        """
+        cursor.execute(create_table_sql)
+        conn.commit()
+        
     logger.info("Database initialized successfully.")
 
 def fetch_owid_data() -> pd.DataFrame:
-    """
-    Fetches real data from the Our World in Data (OWID) repository.
-    Example uses OWID CO2 data mapped to SDG target 13.2 (Climate Action).
-    """
+    """Fetches real data from the Our World in Data (OWID) repository."""
     logger.info("Fetching real OWID data from GitHub repository...")
     url = "https://raw.githubusercontent.com/owid/co2-data/master/owid-co2-data.csv"
     try:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
-        df = pd.read_csv(io.StringIO(response.text))
+        df = pd.read_csv(io.StringIO(response.text), low_memory=False)
         
-        # Standardize for the pipeline
         df = df[['iso_code', 'year', 'co2']].copy()
         df = df.rename(columns={'iso_code': 'CountryCode', 'year': 'Year', 'co2': 'IndicatorValue'})
-        df['SDG_Target'] = '13.2' # Mapping CO2 emissions to Target 13.2
+        df['SDG_Target'] = '13.2'
         
-        # Filter valid ISO3 codes and years
-        df = df[df['CountryCode'].notna() & (df['CountryCode'].str.len() == 3)]
+        # Strict Normalization (Optimized)
+        unique_codes = df['CountryCode'].dropna().unique()
+        code_map = {code: standardize_country_code(code) for code in unique_codes}
+        df['CountryCode'] = df['CountryCode'].map(code_map)
+        df = df.dropna(subset=['CountryCode'])
+        
         df = df[df['Year'].between(2015, 2025)]
         
         logger.info(f"Fetched {len(df)} records from OWID.")
@@ -95,7 +117,6 @@ def process_un_data(raw_data_dir: str) -> list[pd.DataFrame]:
         try:
             df = pd.read_excel(file_path)
             
-            # Harmonize column names dynamically based on typical UN SDG file structures
             col_map = {}
             for col in df.columns:
                 col_str = str(col).lower()
@@ -109,7 +130,6 @@ def process_un_data(raw_data_dir: str) -> list[pd.DataFrame]:
                 
             required = ['CountryCode', 'SDG_Target', 'Year', 'IndicatorValue']
             
-            # If the format is wide (years as columns), melt it
             year_cols = [c for c in df.columns if str(c).isdigit() and 2015 <= int(c) <= 2025]
             if year_cols and 'Year' not in df.columns:
                 id_vars = [c for c in df.columns if c not in year_cols]
@@ -119,11 +139,15 @@ def process_un_data(raw_data_dir: str) -> list[pd.DataFrame]:
                 df = df[required].copy()
                 df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
                 df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
-                df['CountryCode'] = df['CountryCode'].astype(str)
                 df['SDG_Target'] = df['SDG_Target'].astype(str)
                 
+                # Strict Normalization (Optimized)
+                unique_codes = df['CountryCode'].dropna().unique()
+                code_map = {code: standardize_country_code(code) for code in unique_codes}
+                df['CountryCode'] = df['CountryCode'].map(code_map)
+                
                 df = df[df['Year'].between(2015, 2025)]
-                df = df.dropna(subset=['IndicatorValue'])
+                df = df.dropna(subset=['IndicatorValue', 'CountryCode'])
                 all_data.append(df)
             else:
                 logger.warning(f"File {os.path.basename(file_path)} missing required columns. Skipping.")
@@ -135,16 +159,16 @@ def process_un_data(raw_data_dir: str) -> list[pd.DataFrame]:
 
 def build_master_grid_and_load(all_dfs: list, db_path: str):
     """
-    Creates a Cartesian Master Grid, merges actual data, imputes missing values, 
-    and saves to SQLite without dropping sparse rows.
+    Creates a Cartesian Master Grid, merges actual data, imputes missing values safely, 
+    and saves to SQLite using context managers.
     """
     logger.info("Concatenating all data sources...")
     combined_df = pd.concat(all_dfs, ignore_index=True)
     
-    # Deduplicate in case multiple files/sources provided the same country/target/year
+    # Deduplicate
     combined_df = combined_df.groupby(['CountryCode', 'SDG_Target', 'Year'], as_index=False)['IndicatorValue'].mean()
     
-    logger.info("Generating Cartesian Master Grid (ISO3 x Targets x Years)...")
+    logger.info("Generating Cartesian Master Grid...")
     years = list(range(2015, 2026))
     
     master_index = pd.MultiIndex.from_product(
@@ -156,31 +180,32 @@ def build_master_grid_and_load(all_dfs: list, db_path: str):
     logger.info("Executing LEFT JOIN onto Master Grid...")
     merged_df = pd.merge(master_df, combined_df, on=['CountryCode', 'SDG_Target', 'Year'], how='left')
     
-    logger.info("Applying mathematically robust imputation (Linear Interpolate -> FFill -> BFill)...")
+    logger.info("Applying constrained imputation (limit=2) to prevent over-projecting gaps...")
     merged_df = merged_df.sort_values(by=['CountryCode', 'SDG_Target', 'Year'])
     
-    # Impute missing values within each Country & Target group
+    # Impute missing values with strict limits to avoid hallucinating data
     merged_df['IndicatorValue'] = merged_df.groupby(['CountryCode', 'SDG_Target'])['IndicatorValue'].transform(
-        lambda group: group.interpolate(method='linear', limit_direction='both')
+        lambda group: group.interpolate(method='linear', limit=2, limit_direction='both')
     )
-    # Forward fill then Backward fill for the remaining NaNs at the edges
-    merged_df['IndicatorValue'] = merged_df.groupby(['CountryCode', 'SDG_Target'])['IndicatorValue'].ffill().bfill()
+    merged_df['IndicatorValue'] = merged_df.groupby(['CountryCode', 'SDG_Target'])['IndicatorValue'].transform(
+        lambda group: group.ffill(limit=2).bfill(limit=2)
+    )
     
-    logger.info(f"Loading {len(merged_df)} rows into SQLite database...")
-    conn = sqlite3.connect(db_path)
-    # Using temp table for efficient insertion
-    merged_df.to_sql('temp_load_table', conn, if_exists='replace', index=False)
+    logger.info(f"Loading {len(merged_df)} rows into SQLite database safely...")
     
-    insert_sql = """
-    INSERT OR REPLACE INTO sdg_global_data (CountryCode, SDG_Target, Year, IndicatorValue)
-    SELECT CountryCode, SDG_Target, Year, IndicatorValue FROM temp_load_table
-    """
-    cursor = conn.cursor()
-    cursor.execute(insert_sql)
-    conn.commit()
-    cursor.execute("DROP TABLE temp_load_table")
-    conn.commit()
-    conn.close()
+    # Safe Context Manager Database Push
+    with sqlite3.connect(db_path) as conn:
+        merged_df.to_sql('temp_load_table', conn, if_exists='replace', index=False)
+        
+        insert_sql = """
+        INSERT OR REPLACE INTO sdg_global_data (CountryCode, SDG_Target, Year, IndicatorValue)
+        SELECT CountryCode, SDG_Target, Year, IndicatorValue FROM temp_load_table
+        """
+        cursor = conn.cursor()
+        cursor.execute(insert_sql)
+        conn.commit()
+        cursor.execute("DROP TABLE temp_load_table")
+        conn.commit()
     
     logger.info("Database loaded successfully.")
 
@@ -193,11 +218,9 @@ def run_pipeline():
     
     all_data_frames = []
     
-    # 1. Load local UN SDG .xlsx files
     un_dfs = process_un_data(raw_data_dir)
     all_data_frames.extend(un_dfs)
     
-    # 2. Fetch and append real OWID data
     owid_df = fetch_owid_data()
     if not owid_df.empty:
         all_data_frames.append(owid_df)

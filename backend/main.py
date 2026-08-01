@@ -21,7 +21,7 @@ app = FastAPI(
 # Setup CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For production, replace with specific origins
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,9 +29,6 @@ app.add_middleware(
 
 # Pydantic Schemas
 class PredictionResponse(BaseModel):
-    """
-    Standard schema for returning predictions, historical data, and AI narratives.
-    """
     country_code: str
     sdg_target: str
     historical_data: List[Dict[str, Any]]
@@ -54,14 +51,13 @@ async def predict_trajectory(
     # Query database
     df = query_database(country_code, sdg_target)
     
-    # Process Historical Data
     if not df.empty:
         historical_data = df.to_dict(orient='records')
     else:
         historical_data = []
         
-    # ML Prediction (includes sparse data bypass logic)
-    ml_results = train_and_predict(df)
+    # ML Prediction is now ASYNC so we await it
+    ml_results = await train_and_predict(df, sdg_target=sdg_target)
     
     response = PredictionResponse(
         country_code=country_code,
@@ -87,17 +83,15 @@ async def simulate_policy(
     """
     logger.info(f"API Request: /api/simulate | Country: {country_code}, Target: {sdg_target}, Multiplier: {policy_impact_multiplier}")
     
-    # Query database
     df = query_database(country_code, sdg_target)
     
-    # Process Historical Data
     if not df.empty:
         historical_data = df.to_dict(orient='records')
     else:
         historical_data = []
         
-    # ML Prediction with Policy Simulation
-    ml_results = train_and_predict(df, policy_multiplier=policy_impact_multiplier)
+    # ML Prediction with Policy Simulation is now ASYNC
+    ml_results = await train_and_predict(df, sdg_target=sdg_target, policy_multiplier=policy_impact_multiplier)
     
     response = PredictionResponse(
         country_code=country_code,
@@ -113,5 +107,4 @@ async def simulate_policy(
 
 if __name__ == "__main__":
     import uvicorn
-    # Allow running directly via python main.py for development
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

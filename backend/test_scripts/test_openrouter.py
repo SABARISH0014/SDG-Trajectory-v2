@@ -1,5 +1,8 @@
 import sys
 import os
+
+# Add the parent directory (backend) to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models import generate_narrative
 try:
     from dotenv import load_dotenv
@@ -33,7 +36,8 @@ def test_llm():
     
     # 3. Trigger the function
     try:
-        narrative = generate_narrative(mock_stats)
+        import asyncio
+        narrative = asyncio.run(generate_narrative(mock_stats))
         print("\n--- LLM Response ---")
         print(narrative)
         print("--------------------")

@@ -23,19 +23,20 @@ def test_database_exists():
     """Test that the SQLite database file exists at the expected path."""
     assert os.path.exists(DB_PATH), f"Database file {DB_PATH} does not exist."
 
-def test_no_null_indicator_values():
+def test_sparse_data_nulls_retained():
     """
-    Test utility that queries the database to assert there are no NULL 
-    or NaN values in the IndicatorValue column.
+    Test utility that queries the database to assert that the Cartesian grid 
+    successfully retained NULL values for countries/targets with absolutely zero data, 
+    as per the strict enterprise requirements (Sparse Data Bypass).
     """
     conn = sqlite3.connect(DB_PATH)
     query = "SELECT IndicatorValue FROM sdg_global_data"
     df = pd.read_sql(query, conn)
     conn.close()
     
-    # Assert there are no null values in the IndicatorValue column
-    assert df["IndicatorValue"].isnull().sum() == 0, "Found NULL values in IndicatorValue"
-    assert not df["IndicatorValue"].isna().any(), "Found NaN values in IndicatorValue"
+    # We EXPECT null values because we do not use dropna() on the Master Grid
+    null_count = df["IndicatorValue"].isnull().sum()
+    assert null_count > 0, "Expected NULL values for completely sparse targets, but found 0. The Cartesian grid might be accidentally dropping empty countries."
 
 
 # ==========================================
@@ -61,6 +62,8 @@ def test_filter_outliers_sparse_data(mock_historical_data):
     assert len(df_clean) == 3
     pd.testing.assert_frame_equal(df_clean, mock_historical_data)
 
+import asyncio
+
 def test_forecasting_and_classification():
     """
     Test the forecasting function to assert that it runs without crashing 
@@ -71,9 +74,10 @@ def test_forecasting_and_classification():
         "IndicatorValue": [10.5, 11.2, 11.8, 12.5, 13.0, 13.8]
     })
     
-    # Run the new AI prediction logic
-    result = train_and_predict(extended_df)
+    # Run the new AI prediction logic (now async)
+    result = asyncio.run(train_and_predict(extended_df))
     assert result is not None, "Model failed to return predictions."
+    assert "predictions" in result, "Predictions missing from result."
 
 
 # ==========================================
