@@ -75,7 +75,7 @@ def test_forecasting_and_classification():
     })
     
     # Run the new AI prediction logic (now async)
-    result = asyncio.run(train_and_predict(extended_df))
+    result = asyncio.run(train_and_predict(extended_df, sdg_target='13.2'))
     assert result is not None, "Model failed to return predictions."
     assert "predictions" in result, "Predictions missing from result."
 
@@ -129,3 +129,33 @@ def test_api_simulate_valid():
         assert data.get("policy_simulated_projection") is None
     else:
         assert data.get("policy_simulated_projection") is not None
+
+# ==========================================
+# 4. Admin API Endpoint Tests (main.py)
+# ==========================================
+
+def test_admin_login_success():
+    response = client.post("/api/admin/login", json={"username": "admin", "password": "admin123"})
+    assert response.status_code == 200
+    data = response.json()
+    assert "token" in data
+
+def test_admin_login_failure():
+    response = client.post("/api/admin/login", json={"username": "admin", "password": "wrongpassword"})
+    assert response.status_code == 401
+
+def test_admin_config_requires_auth():
+    response = client.post("/api/admin/config", json={"contamination": 0.1})
+    assert response.status_code == 401
+
+def test_admin_config_bounds_check():
+    login_res = client.post("/api/admin/login", json={"username": "admin", "password": "admin123"})
+    assert login_res.status_code == 200, "Setup failed: Could not login for token"
+    token = login_res.json()["token"]
+    
+    response = client.post(
+        "/api/admin/config", 
+        json={"contamination": 0.9},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 400

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "IND",
+    "location": [20.5937, 78.9629],
+    "name": "India",
+    "users": 1500
+  },
+  {
+    "id": "ABW",
+    "location": [12.5211, -69.9683],
+    "name": "Aruba",
+    "users": 200
+  },
+  {
+    "id": "AFG",
+    "location": [33.9391, 67.7100],
+    "name": "Afghanistan",
+    "users": 100
+  },
+  {
+    "id": "AGO",
+    "location": [-11.2027, 17.8739],
+    "name": "Angola",
+    "users": 120
+  },
+  {
+    "id": "ALB",
+    "location": [41.1533, 20.1683],
+    "name": "Albania",
+    "users": 80
+  },
+  {
+    "id": "ARE",
+    "location": [23.4241, 53.8478],
+    "name": "United Arab Emirates",
+    "users": 500
+  }
+]

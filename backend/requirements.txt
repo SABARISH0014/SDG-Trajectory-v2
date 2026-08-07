@@ -7,3 +7,8 @@ requests
 python-dotenv
 pycountry
 httpx
+PyJWT
+passlib
+bcrypt
+SQLAlchemy
+openpyxl
