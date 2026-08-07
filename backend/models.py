@@ -19,26 +19,42 @@ def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
     Uses IsolationForest to detect and remove anomalous data points.
     Safety feature: Ensures the most recent chronological data point is never removed
     so we don't skew the endpoint of the trajectory.
-    Skips if len(df) < 4.
+    Skips if real data points < 4.
     """
-    if len(df) < 4:
+    real_mask = ~df.get('is_imputed', pd.Series(False, index=df.index)).astype(bool)
+    real_df = df[real_mask].copy()
+
+    if len(real_df) < 4:
         return df
         
     try:
         # Sort chronologically
-        df = df.sort_values(by='Year').copy()
+        real_df = real_df.sort_values(by='Year')
         
+        # Read dynamic contamination config
+        import json
+        contamination_val = 0.1
+        if os.path.exists("admin_config.json"):
+            with open("admin_config.json", "r") as f:
+                config = json.load(f)
+                contamination_val = config.get("contamination", 0.1)
+                
         # Reshape for sklearn
-        X = df[['IndicatorValue']].values
-        iso_forest = IsolationForest(contamination=0.1, random_state=42)
+        X = real_df[['IndicatorValue']].values
+        iso_forest = IsolationForest(contamination=contamination_val, random_state=42)
         preds = iso_forest.fit_predict(X)
         
-        # Add prediction back to df
-        df['IsOutlier'] = (preds == -1)
+        # Add prediction
+        real_df['IsOutlier'] = (preds == -1)
         
         # CRITICAL SAFETY: Protect the most recent year from being dropped
-        latest_year = df['Year'].max()
-        df.loc[df['Year'] == latest_year, 'IsOutlier'] = False
+        latest_year = real_df['Year'].max()
+        real_df.loc[real_df['Year'] == latest_year, 'IsOutlier'] = False
+        
+        # Merge back to original df
+        df = df.copy()
+        df['IsOutlier'] = False
+        df.loc[real_mask, 'IsOutlier'] = real_df['IsOutlier']
         
         # Keep only inliers
         filtered_df = df[~df['IsOutlier']].copy()
@@ -123,28 +139,49 @@ def classify_status(baseline_value: float, projected_value: float, sdg_target: s
         else:
             return "Off-track"
 
-async def train_and_predict(df: pd.DataFrame, sdg_target: str, policy_multiplier: float = 1.0) -> dict:
+def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multiplier: float = 1.0) -> dict:
     """
-    Trains a LinearRegression model to predict values for 2026-2030.
-    Applies sparse data bypass if data is insufficient.
-    NOTE: Now an async function because it awaits generate_narrative.
+    Core mathematical logic for SDG trajectory regression.
+    Synchronous and reusable to prevent double implementation.
     """
-    # Sparse Data Bypass (CRITICAL)
-    if df.empty or len(df.dropna()) < 2:
-        logger.warning("Insufficient data. Triggering sparse data bypass.")
-        return {
-            "predictions": [],
-            "status": "Insufficient Data",
-            "ai_narrative": "Not enough historical data available to generate a 2030 trajectory."
-        }
-    
     df = df.dropna(subset=['IndicatorValue', 'Year']).copy()
     
+    if 'is_imputed' not in df.columns:
+        df['is_imputed'] = False
+        
     # Safe Anomaly Detection
     clean_df = filter_outliers(df)
     
-    X_train = clean_df[['Year']].values
-    y_train = clean_df['IndicatorValue'].values
+    # Extract ONLY real data for training
+    real_df = clean_df[~clean_df['is_imputed'].astype(bool)]
+    
+    # Sparse Data Bypass (CRITICAL)
+    if len(real_df) < 3:
+        logger.warning(f"Insufficient real data ({len(real_df)} points). Triggering sparse data bypass.")
+        return {
+            "predictions": [],
+            "status": "Insufficient Data",
+            "baseline_value": None,
+            "projected_value_2030": None
+        }
+        
+    # Low Variance Check (Check if all real values are nearly identical)
+    y_train = real_df['IndicatorValue'].values
+    if np.var(y_train) < 1e-8:
+        # If variance is practically zero, the trend is flat
+        baseline_val = float(y_train[0])
+        projection_2030 = baseline_val
+        status = classify_status(baseline_val, projection_2030, sdg_target)
+        predictions = [{"Year": year, "PredictedValue": projection_2030} for year in range(2026, 2031)]
+        return {
+            "predictions": predictions,
+            "status": status,
+            "baseline_value": baseline_val,
+            "projected_value_2030": projection_2030,
+            "policy_simulated_projection": projection_2030 if policy_multiplier != 1.0 else None
+        }
+    
+    X_train = real_df[['Year']].values
     
     model = LinearRegression()
     model.fit(X_train, y_train)
@@ -174,18 +211,32 @@ async def train_and_predict(df: pd.DataFrame, sdg_target: str, policy_multiplier
     
     status = classify_status(baseline_val, projection_2030, sdg_target)
     
-    stats = {
+    return {
+        "predictions": predictions,
         "status": status,
         "baseline_value": baseline_val,
-        "projected_value_2030": projection_2030
+        "projected_value_2030": projection_2030,
+        "policy_simulated_projection": projection_2030 if policy_multiplier != 1.0 else None
     }
+
+
+async def train_and_predict(df: pd.DataFrame, sdg_target: str, policy_multiplier: float = 1.0) -> dict:
+    """
+    Trains a LinearRegression model to predict values for 2026-2030.
+    Applies sparse data bypass if data is insufficient.
+    NOTE: Wraps calculate_core_trajectory with an async LLM narrative call.
+    """
+    stats = calculate_core_trajectory(df, sdg_target, policy_multiplier)
+    
+    if stats.get("status") == "Insufficient Data":
+        return {
+            "predictions": [],
+            "status": "Insufficient Data",
+            "ai_narrative": "Not enough historical data available to generate a reliable 2030 trajectory."
+        }
     
     # Await the async API call
     narrative = await generate_narrative(stats)
     
-    return {
-        "predictions": predictions,
-        "status": status,
-        "ai_narrative": narrative,
-        "policy_simulated_projection": projection_2030 if policy_multiplier != 1.0 else None
-    }
+    stats["ai_narrative"] = narrative
+    return stats

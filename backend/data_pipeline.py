@@ -1,5 +1,6 @@
 import pandas as pd
-import sqlite3
+from database import engine, SessionLocal
+from sqlalchemy import text
 import glob
 import os
 import requests
@@ -41,11 +42,9 @@ def standardize_country_code(raw_code: str) -> str:
         
     raw_str = str(raw_code).strip().upper()
     
-    # Fast path if it's already a valid ISO3
     if len(raw_str) == 3 and pycountry.countries.get(alpha_3=raw_str):
         return raw_str
         
-    # Try fuzzy matching if it's a name or full string
     try:
         results = pycountry.countries.search_fuzzy(raw_str)
         if results:
@@ -54,30 +53,6 @@ def standardize_country_code(raw_code: str) -> str:
         pass
         
     return None
-
-def initialize_database(db_path: str):
-    """Initializes the SQLite database and creates the sdg_global_data table safely."""
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    logger.info("Initializing database...")
-    
-    # Safe Context Manager Implementation
-    with sqlite3.connect(db_path) as conn:
-        cursor = conn.cursor()
-        cursor.execute("DROP TABLE IF EXISTS sdg_global_data")
-        
-        create_table_sql = """
-        CREATE TABLE sdg_global_data (
-            CountryCode TEXT,
-            SDG_Target TEXT,
-            Year INTEGER,
-            IndicatorValue REAL,
-            UNIQUE(CountryCode, SDG_Target, Year)
-        )
-        """
-        cursor.execute(create_table_sql)
-        conn.commit()
-        
-    logger.info("Database initialized successfully.")
 
 def fetch_owid_data() -> pd.DataFrame:
     """Fetches real data from the Our World in Data (OWID) repository."""
@@ -91,8 +66,9 @@ def fetch_owid_data() -> pd.DataFrame:
         df = df[['iso_code', 'year', 'co2']].copy()
         df = df.rename(columns={'iso_code': 'CountryCode', 'year': 'Year', 'co2': 'IndicatorValue'})
         df['SDG_Target'] = '13.2'
+        df['Source'] = 'OWID'
         
-        # Strict Normalization (Optimized)
+        # Strict Normalization
         unique_codes = df['CountryCode'].dropna().unique()
         code_map = {code: standardize_country_code(code) for code in unique_codes}
         df['CountryCode'] = df['CountryCode'].map(code_map)
@@ -140,8 +116,8 @@ def process_un_data(raw_data_dir: str) -> list[pd.DataFrame]:
                 df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
                 df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
                 df['SDG_Target'] = df['SDG_Target'].astype(str)
+                df['Source'] = 'UN_Excel'
                 
-                # Strict Normalization (Optimized)
                 unique_codes = df['CountryCode'].dropna().unique()
                 code_map = {code: standardize_country_code(code) for code in unique_codes}
                 df['CountryCode'] = df['CountryCode'].map(code_map)
@@ -157,76 +133,177 @@ def process_un_data(raw_data_dir: str) -> list[pd.DataFrame]:
             
     return all_data
 
-def build_master_grid_and_load(all_dfs: list, db_path: str):
+def process_worldbank_data(raw_data_dir: str) -> pd.DataFrame:
+    wb_file = os.path.join(raw_data_dir, 'worldbank_sdg.csv')
+    if not os.path.exists(wb_file):
+        logger.warning(f"WorldBank file not found: {wb_file}")
+        return pd.DataFrame()
+        
+    logger.info(f"Reading WorldBank file: {os.path.basename(wb_file)}")
+    try:
+        df = pd.read_csv(wb_file)
+        
+        col_map = {}
+        for col in df.columns:
+            col_str = str(col).lower()
+            if col_str in ['country code', 'countrycode', 'iso3', 'ref_area']: col_map[col] = 'CountryCode'
+            elif col_str in ['indicator code', 'target', 'sdg', 'indicator']: col_map[col] = 'SDG_Target'
+            elif col_str in ['year', 'time_period']: col_map[col] = 'Year'
+            elif col_str in ['value', 'indicatorvalue']: col_map[col] = 'IndicatorValue'
+            
+        if col_map:
+            df = df.rename(columns=col_map)
+            
+        year_cols = [c for c in df.columns if str(c).isdigit() and 2015 <= int(c) <= 2025]
+        if year_cols and 'Year' not in df.columns:
+            id_vars = [c for c in df.columns if c not in year_cols]
+            df = df.melt(id_vars=id_vars, value_vars=year_cols, var_name='Year', value_name='IndicatorValue')
+            
+        required = ['CountryCode', 'SDG_Target', 'Year', 'IndicatorValue']
+        if all(col in df.columns for col in required):
+            df = df[required].copy()
+            df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
+            df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
+            df['SDG_Target'] = df['SDG_Target'].astype(str)
+            df['Source'] = 'WorldBank'
+            
+            unique_codes = df['CountryCode'].dropna().unique()
+            code_map = {code: standardize_country_code(code) for code in unique_codes}
+            df['CountryCode'] = df['CountryCode'].map(code_map)
+            
+            df = df[df['Year'].between(2015, 2025)]
+            df = df.dropna(subset=['IndicatorValue', 'CountryCode'])
+            return df
+        else:
+            logger.warning(f"WorldBank file missing required columns. Schema found: {df.columns.tolist()}")
+            return pd.DataFrame()
+            
+    except Exception as e:
+        logger.error(f"Error processing WorldBank data: {e}")
+        return pd.DataFrame()
+
+def build_master_grid_and_load(all_dfs: list):
     """
-    Creates a Cartesian Master Grid, merges actual data, imputes missing values safely, 
-    and saves to SQLite using context managers.
+    Deduplicates hierarchically, imputes gaps safely (within actual coverage only),
+    and atomically loads into SQLite via shadow swap.
     """
     logger.info("Concatenating all data sources...")
     combined_df = pd.concat(all_dfs, ignore_index=True)
     
-    # Deduplicate
-    combined_df = combined_df.groupby(['CountryCode', 'SDG_Target', 'Year'], as_index=False)['IndicatorValue'].mean()
+    # Hierarchical Deduplication
+    source_priority = {'UN_Excel': 1, 'WorldBank': 2, 'OWID': 3}
+    combined_df['priority'] = combined_df['Source'].map(source_priority)
+    combined_df = combined_df.sort_values(by=['CountryCode', 'SDG_Target', 'Year', 'priority'])
     
-    logger.info("Generating Cartesian Master Grid...")
+    logger.info(f"Records before deduplication: {len(combined_df)}")
+    combined_df = combined_df.drop_duplicates(subset=['CountryCode', 'SDG_Target', 'Year'], keep='first')
+    logger.info(f"Records after deduplication: {len(combined_df)}")
+    
+    # Drop priority and Source
+    combined_df = combined_df.drop(columns=['priority', 'Source'])
+    
+    # Add provenance flag
+    combined_df['is_imputed'] = False
+    
+    logger.info("Performing safe gap interpolation (no flat-tails)...")
+    
+    def safe_impute(group):
+        group = group.sort_values('Year')
+        min_year = int(group['Year'].min())
+        max_year = int(group['Year'].max())
+        
+        # Only reindex to the actual span of this specific group
+        full_years = range(min_year, max_year + 1)
+        
+        group = group.set_index('Year')
+        group = group.reindex(full_years)
+        
+        # Identify missing spots that will be imputed
+        missing_mask = group['IndicatorValue'].isna()
+        
+        group['CountryCode'] = group['CountryCode'].ffill().bfill()
+        group['SDG_Target'] = group['SDG_Target'].ffill().bfill()
+        
+        # Linear interpolation
+        group['IndicatorValue'] = group['IndicatorValue'].interpolate(method='linear')
+        
+        # Tag imputed
+        group['is_imputed'] = missing_mask
+        
+        return group.reset_index().rename(columns={'index': 'Year'})
+
+    # Apply imputation per group
+    imputed_dfs = []
+    grouped = combined_df.groupby(['CountryCode', 'SDG_Target'])
+    for name, group in grouped:
+        if len(group) > 1:
+            imputed_dfs.append(safe_impute(group))
+        else:
+            imputed_dfs.append(group) # Can't interpolate a single point
+            
+    final_df = pd.concat(imputed_dfs, ignore_index=True)
+    
+    logger.info("Generating full Cartesian Master Grid to guarantee 100% target coverage...")
     years = list(range(2015, 2026))
-    
     master_index = pd.MultiIndex.from_product(
         [ISO3_CODES, SDG_TARGETS, years],
         names=['CountryCode', 'SDG_Target', 'Year']
     )
     master_df = pd.DataFrame(index=master_index).reset_index()
     
-    logger.info("Executing LEFT JOIN onto Master Grid...")
-    merged_df = pd.merge(master_df, combined_df, on=['CountryCode', 'SDG_Target', 'Year'], how='left')
+    logger.info("Merging processed data into Master Grid (out-of-bounds dates will remain safely as NULL)...")
+    final_master_df = pd.merge(master_df, final_df, on=['CountryCode', 'SDG_Target', 'Year'], how='left')
     
-    logger.info("Applying constrained imputation (limit=2) to prevent over-projecting gaps...")
-    merged_df = merged_df.sort_values(by=['CountryCode', 'SDG_Target', 'Year'])
+    # Fill NaN is_imputed flags with False (meaning it's not a synthetic bridge, it's just raw missing data)
+    final_master_df['is_imputed'] = final_master_df['is_imputed'].fillna(False)
     
-    # Impute missing values with strict limits to avoid hallucinating data
-    merged_df['IndicatorValue'] = merged_df.groupby(['CountryCode', 'SDG_Target'])['IndicatorValue'].transform(
-        lambda group: group.interpolate(method='linear', limit=2, limit_direction='both')
-    )
-    merged_df['IndicatorValue'] = merged_df.groupby(['CountryCode', 'SDG_Target'])['IndicatorValue'].transform(
-        lambda group: group.ffill(limit=2).bfill(limit=2)
-    )
+    logger.info(f"Final dataset size: {len(final_master_df)} (Imputed bridges: {final_df['is_imputed'].sum()} rows)")
     
-    logger.info(f"Loading {len(merged_df)} rows into SQLite database safely...")
+    logger.info("Starting zero-downtime database load...")
     
-    # Safe Context Manager Database Push
-    with sqlite3.connect(db_path) as conn:
-        merged_df.to_sql('temp_load_table', conn, if_exists='replace', index=False)
+    # Dump to staging table using SQLAlchemy
+    try:
+        final_master_df.to_sql('sdg_global_data_staging', con=engine, if_exists='replace', index=False)
         
-        insert_sql = """
-        INSERT OR REPLACE INTO sdg_global_data (CountryCode, SDG_Target, Year, IndicatorValue)
-        SELECT CountryCode, SDG_Target, Year, IndicatorValue FROM temp_load_table
-        """
-        cursor = conn.cursor()
-        cursor.execute(insert_sql)
-        conn.commit()
-        cursor.execute("DROP TABLE temp_load_table")
-        conn.commit()
-    
-    logger.info("Database loaded successfully.")
+        # Atomic swap
+        with engine.begin() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS sdg_global_data_old;"))
+            
+            # Check if sdg_global_data exists
+            table_exists = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='sdg_global_data';")).fetchone()
+            if table_exists:
+                conn.execute(text("ALTER TABLE sdg_global_data RENAME TO sdg_global_data_old;"))
+                
+            conn.execute(text("ALTER TABLE sdg_global_data_staging RENAME TO sdg_global_data;"))
+            conn.execute(text("DROP TABLE IF EXISTS sdg_global_data_old;"))
+            
+            # Recreate indices on new table
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_country_target_year ON sdg_global_data (CountryCode, SDG_Target, Year);"))
+            
+        logger.info("Zero-downtime database load completed successfully.")
+    except Exception as e:
+        logger.error(f"Database load failed: {e}")
+        raise
 
 def run_pipeline():
     base_dir = os.path.dirname(__file__)
     raw_data_dir = os.path.join(base_dir, "raw_data")
-    db_path = os.path.join(base_dir, 'sdg_database.db')
-    
-    initialize_database(db_path)
     
     all_data_frames = []
     
     un_dfs = process_un_data(raw_data_dir)
     all_data_frames.extend(un_dfs)
     
+    wb_df = process_worldbank_data(raw_data_dir)
+    if not wb_df.empty:
+        all_data_frames.append(wb_df)
+    
     owid_df = fetch_owid_data()
     if not owid_df.empty:
         all_data_frames.append(owid_df)
         
     if all_data_frames:
-        build_master_grid_and_load(all_data_frames, db_path)
+        build_master_grid_and_load(all_data_frames)
     else:
         logger.error("No data processed. Pipeline aborted.")
 
