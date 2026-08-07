@@ -22,6 +22,8 @@ def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
     Skips if real data points < 4.
     """
     real_mask = ~df.get('is_imputed', pd.Series(False, index=df.index)).astype(bool)
+    if 'is_regional_estimate' in df.columns:
+        real_mask = real_mask & ~df['is_regional_estimate'].astype(bool)
     real_df = df[real_mask].copy()
 
     if len(real_df) < 4:
@@ -148,12 +150,17 @@ def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multipli
     
     if 'is_imputed' not in df.columns:
         df['is_imputed'] = False
+    if 'is_regional_estimate' not in df.columns:
+        df['is_regional_estimate'] = False
         
     # Safe Anomaly Detection
     clean_df = filter_outliers(df)
     
-    # Extract ONLY real data for training
+    # Extract ONLY real data for training (is_imputed == False is the primary safety net)
     real_df = clean_df[~clean_df['is_imputed'].astype(bool)]
+    # Defense-in-depth: explicitly exclude regional estimates just in case
+    if 'is_regional_estimate' in real_df.columns:
+        real_df = real_df[~real_df['is_regional_estimate'].astype(bool)]
     
     # Sparse Data Bypass (CRITICAL)
     if len(real_df) < 3:

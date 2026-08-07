@@ -12,3 +12,4 @@ passlib
 bcrypt
 SQLAlchemy
 openpyxl
+pandasdmx

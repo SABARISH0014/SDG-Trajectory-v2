@@ -49,6 +49,7 @@ class SDGGlobalData(Base):
     Year = Column(Integer, index=True, nullable=False)
     IndicatorValue = Column(Float, nullable=True)
     is_imputed = Column(Boolean, default=False)
+    is_regional_estimate = Column(Boolean, default=False)
 
     __table_args__ = (
         Index('idx_country_target_year', 'CountryCode', 'SDG_Target', 'Year', unique=True),
@@ -67,7 +68,7 @@ def query_database(country_code: str, sdg_target: str) -> pd.DataFrame:
         
     try:
         query = text("""
-        SELECT Year, IndicatorValue, is_imputed
+        SELECT Year, IndicatorValue, is_imputed, is_regional_estimate
         FROM sdg_global_data 
         WHERE CountryCode = :country AND SDG_Target = :target
         ORDER BY Year ASC
@@ -94,7 +95,7 @@ def get_country_profile_data(country_code: str) -> pd.DataFrame:
         
     try:
         query = text("""
-        SELECT SDG_Target, Year, IndicatorValue, is_imputed
+        SELECT SDG_Target, Year, IndicatorValue, is_imputed, is_regional_estimate
         FROM sdg_global_data 
         WHERE CountryCode = :country
         ORDER BY SDG_Target ASC, Year ASC
