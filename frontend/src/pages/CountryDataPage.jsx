@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/config';
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -39,7 +40,7 @@ export default function CountryDataPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await axios.get(`/api/country/${countryCode}/profile`);
+        const response = await axios.get(`${API_BASE_URL}/api/country/${countryCode}/profile`);
         setData(response.data);
       } catch (err) {
         setError("Failed to load country profile data. Please try again.");

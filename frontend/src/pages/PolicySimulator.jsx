@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/config';
 import React, { useState, useMemo } from 'react';
 import axios from 'axios';
 import { SlidersHorizontal, Play, Info, Sparkles, BookOpen, HelpCircle } from 'lucide-react';
@@ -49,7 +50,7 @@ export default function PolicySimulator({ goalNumber }) {
   const handleSimulate = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`/api/simulate`, {
+      const response = await axios.get(`${API_BASE_URL}/api/simulate`, {
         params: { 
           country_code: selectedCountry, 
           sdg_target: selectedTarget,

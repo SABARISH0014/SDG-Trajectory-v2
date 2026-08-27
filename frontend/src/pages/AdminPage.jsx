@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/config';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
@@ -21,7 +22,7 @@ export default function AdminPage() {
     setLoading(true);
     setLoginError('');
     try {
-      const response = await axios.post('/api/admin/login', {
+      const response = await axios.post(`${API_BASE_URL}/api/admin/login`, {
         username,
         password
       });
@@ -36,7 +37,7 @@ export default function AdminPage() {
   const handleSync = async () => {
     setSyncStatus('syncing');
     try {
-      await axios.post('/api/admin/sync', {}, {
+      await axios.post(`${API_BASE_URL}/api/admin/sync`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSyncStatus('success');
@@ -50,7 +51,7 @@ export default function AdminPage() {
   const handleConfigUpdate = async () => {
     setConfigStatus('saving');
     try {
-      await axios.post('/api/admin/config', { contamination }, {
+      await axios.post(`${API_BASE_URL}/api/admin/config`, { contamination }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setConfigStatus('success');

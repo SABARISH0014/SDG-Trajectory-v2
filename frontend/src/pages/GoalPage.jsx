@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/config';
 import React, { useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -86,7 +87,7 @@ export default function GoalPage() {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     try {
-      const response = await axios.get(`/api/predict`, {
+      const response = await axios.get(`${API_BASE_URL}/api/predict`, {
         params: { country_code: selectedCountry, sdg_target: selectedTarget }
       });
       

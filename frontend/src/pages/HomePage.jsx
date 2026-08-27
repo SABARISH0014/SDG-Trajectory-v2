@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/config';
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -23,7 +24,7 @@ export default function HomePage() {
   useEffect(() => {
     const fetchMarkers = async () => {
       try {
-        const response = await axios.get('/api/globe/markers');
+        const response = await axios.get(`${API_BASE_URL}/api/globe/markers`);
         setGlobeMarkers(response.data);
       } catch (error) {
         console.error("Failed to fetch globe markers:", error);

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/config';
 import React, { useState, useMemo } from 'react';
 import axios from 'axios';
 import { Scale, Play, Activity, Info, Trophy, TrendingUp, AlertTriangle } from 'lucide-react';
@@ -83,10 +84,10 @@ export default function CountryComparison({ goalNumber }) {
     setDataA(null);
     setDataB(null);
     
-    const reqA = axios.get(`/api/predict`, {
+    const reqA = axios.get(`${API_BASE_URL}/api/predict`, {
       params: { country_code: countryA, sdg_target: selectedTarget }
     });
-    const reqB = axios.get(`/api/predict`, {
+    const reqB = axios.get(`${API_BASE_URL}/api/predict`, {
       params: { country_code: countryB, sdg_target: selectedTarget }
     });
 
