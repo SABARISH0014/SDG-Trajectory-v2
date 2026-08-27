@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import logging
 import asyncio
+import sys
 from datetime import datetime
 from sklearn.ensemble import IsolationForest
 import pycountry
@@ -101,8 +102,8 @@ async def sync_to_database(df: pd.DataFrame):
         
     url, token = get_turso_credentials()
     if not url or not token:
-        logger.error("Missing Turso URL or Auth Token.")
-        return
+        logger.error("FATAL: Missing Turso URL or Auth Token.")
+        sys.exit(1)
 
     records = df.to_dict('records')
     insert_sql = """
@@ -132,7 +133,8 @@ async def sync_to_database(df: pd.DataFrame):
             await client.batch(statements)
             logger.info(f"Database sync complete: Uploaded {len(records)} records in batch.")
     except Exception as e:
-        logger.error(f"Error during database insert: {e}")
+        logger.error(f"FATAL: Error during database insert batch: {e}")
+        sys.exit(1)
 
 async def main():
     logger.info("Starting automated incremental sync...")
