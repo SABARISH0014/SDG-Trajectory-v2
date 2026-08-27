@@ -21,7 +21,7 @@ export default function AdminPage() {
     setLoading(true);
     setLoginError('');
     try {
-      const response = await axios.post('http://localhost:8000/api/admin/login', {
+      const response = await axios.post('/api/admin/login', {
         username,
         password
       });
@@ -36,7 +36,7 @@ export default function AdminPage() {
   const handleSync = async () => {
     setSyncStatus('syncing');
     try {
-      await axios.post('http://localhost:8000/api/admin/sync', {}, {
+      await axios.post('/api/admin/sync', {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSyncStatus('success');
@@ -50,7 +50,7 @@ export default function AdminPage() {
   const handleConfigUpdate = async () => {
     setConfigStatus('saving');
     try {
-      await axios.post('http://localhost:8000/api/admin/config', { contamination }, {
+      await axios.post('/api/admin/config', { contamination }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setConfigStatus('success');

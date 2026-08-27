@@ -83,10 +83,10 @@ export default function CountryComparison({ goalNumber }) {
     setDataA(null);
     setDataB(null);
     
-    const reqA = axios.get(`http://localhost:8000/api/predict`, {
+    const reqA = axios.get(`/api/predict`, {
       params: { country_code: countryA, sdg_target: selectedTarget }
     });
-    const reqB = axios.get(`http://localhost:8000/api/predict`, {
+    const reqB = axios.get(`/api/predict`, {
       params: { country_code: countryB, sdg_target: selectedTarget }
     });
 

@@ -1,28 +1,40 @@
 import os
 import logging
 import pandas as pd
+import pycountry
 from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean, Index, text
 from sqlalchemy.orm import sessionmaker, declarative_base
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
-COUNTRY_TRANSLATION_MAP = {
-    '104': 'MMR',
-    '356': 'IND',
-    '840': 'USA',
-    '826': 'GBR',
-    'India': 'IND',
-    'United States': 'USA',
-    'UK': 'GBR',
-    'Britain': 'GBR'
-}
-
+# Dynamically generate TARGET_TRANSLATION_MAP for all 17 goals
 TARGET_TRANSLATION_MAP = {
     f"Goal{i}": f"{i}.1" for i in range(1, 18)
 }
 
 def translate_frontend_request(country_code: str, sdg_target: str) -> tuple[str, str]:
-    db_country_code = COUNTRY_TRANSLATION_MAP.get(country_code, country_code).upper()
+    db_country_code = country_code
+    if country_code:
+        raw_str = str(country_code).strip().upper()
+        # Direct alpha-3 match
+        if len(raw_str) == 3 and pycountry.countries.get(alpha_3=raw_str):
+            db_country_code = raw_str
+        # Direct alpha-2 match
+        elif len(raw_str) == 2 and pycountry.countries.get(alpha_2=raw_str):
+            db_country_code = pycountry.countries.get(alpha_2=raw_str).alpha_3
+        # Direct numeric match
+        elif raw_str.isdigit() and pycountry.countries.get(numeric=raw_str.zfill(3)):
+            db_country_code = pycountry.countries.get(numeric=raw_str.zfill(3)).alpha_3
+        else:
+            # Fuzzy match
+            try:
+                results = pycountry.countries.search_fuzzy(raw_str)
+                if results:
+                    db_country_code = results[0].alpha_3
+            except LookupError:
+                db_country_code = raw_str
+
     db_sdg_target = TARGET_TRANSLATION_MAP.get(sdg_target, sdg_target)
     return db_country_code, db_sdg_target
 
@@ -59,6 +71,7 @@ def init_db():
     """Create all tables in the database"""
     Base.metadata.create_all(bind=engine)
 
+@lru_cache(maxsize=2048)
 def query_database(country_code: str, sdg_target: str) -> pd.DataFrame:
     db_country, db_target = translate_frontend_request(country_code, sdg_target)
     
@@ -78,15 +91,16 @@ def query_database(country_code: str, sdg_target: str) -> pd.DataFrame:
             df = pd.read_sql_query(query, conn, params={"country": db_country, "target": db_target})
         
         if not df.empty:
+            df = df.where(pd.notnull(df), None) # Clean NULLs to None
             df['Year'] = df['Year'].astype(int)
-            df['IndicatorValue'] = df['IndicatorValue'].astype(float)
+            df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
             
         return df
     except Exception as e:
         logger.error(f"Failed to query database: {e}")
         return pd.DataFrame()
 
-
+@lru_cache(maxsize=2048)
 def get_country_profile_data(country_code: str) -> pd.DataFrame:
     db_country, _ = translate_frontend_request(country_code, "")
     
@@ -105,10 +119,16 @@ def get_country_profile_data(country_code: str) -> pd.DataFrame:
             df = pd.read_sql_query(query, conn, params={"country": db_country})
         
         if not df.empty:
+            df = df.where(pd.notnull(df), None) # Clean NULLs to None
             df['Year'] = df['Year'].astype(int)
-            df['IndicatorValue'] = df['IndicatorValue'].astype(float)
+            df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
             
         return df
     except Exception as e:
         logger.error(f"Failed to query country profile data: {e}")
         return pd.DataFrame()
+
+def clear_db_cache():
+    """Clear the LRU cache when database updates occur."""
+    query_database.cache_clear()
+    get_country_profile_data.cache_clear()

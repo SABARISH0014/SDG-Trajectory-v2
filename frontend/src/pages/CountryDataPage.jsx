@@ -39,7 +39,7 @@ export default function CountryDataPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await axios.get(`http://localhost:8000/api/country/${countryCode}/profile`);
+        const response = await axios.get(`/api/country/${countryCode}/profile`);
         setData(response.data);
       } catch (err) {
         setError("Failed to load country profile data. Please try again.");

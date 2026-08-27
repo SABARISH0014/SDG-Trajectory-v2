@@ -23,7 +23,7 @@ export default function HomePage() {
   useEffect(() => {
     const fetchMarkers = async () => {
       try {
-        const response = await axios.get('http://localhost:8000/api/globe/markers');
+        const response = await axios.get('/api/globe/markers');
         setGlobeMarkers(response.data);
       } catch (error) {
         console.error("Failed to fetch globe markers:", error);

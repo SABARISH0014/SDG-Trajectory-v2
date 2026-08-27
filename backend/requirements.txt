@@ -1,4 +1,5 @@
 pandas
+numpy
 scikit-learn
 fastapi
 uvicorn
@@ -8,8 +9,11 @@ python-dotenv
 pycountry
 httpx
 PyJWT
-passlib
-bcrypt
+passlib[bcrypt]
 SQLAlchemy
 openpyxl
-pandasdmx
+sdmx1
+pydantic-settings
+slowapi
+pycountry-convert
+pytest

@@ -86,7 +86,7 @@ export default function GoalPage() {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     try {
-      const response = await axios.get(`http://localhost:8000/api/predict`, {
+      const response = await axios.get(`/api/predict`, {
         params: { country_code: selectedCountry, sdg_target: selectedTarget }
       });
       

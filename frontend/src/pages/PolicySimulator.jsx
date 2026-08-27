@@ -49,7 +49,7 @@ export default function PolicySimulator({ goalNumber }) {
   const handleSimulate = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:8000/api/simulate`, {
+      const response = await axios.get(`/api/simulate`, {
         params: { 
           country_code: selectedCountry, 
           sdg_target: selectedTarget,

@@ -10,7 +10,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import query_database
-from models import filter_outliers, train_and_predict, classify_status
+from forecasting import filter_outliers, train_and_predict, classify_status, calculate_core_trajectory
 from main import app
 
 DB_PATH = "sdg_database.db"
@@ -158,4 +158,4 @@ def test_admin_config_bounds_check():
         json={"contamination": 0.9},
         headers={"Authorization": f"Bearer {token}"}
     )
-    assert response.status_code == 400
+    assert response.status_code == 422

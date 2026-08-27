@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException, Query, Depends, Header, BackgroundTasks, status
+from fastapi import FastAPI, HTTPException, Query, Depends, Header, BackgroundTasks, status, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Any
+from contextlib import asynccontextmanager
 import logging
 import secrets
 import os
@@ -9,9 +10,15 @@ import json
 import tempfile
 import shutil
 import pandas as pd
+import threading
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+from config import settings
 from database import query_database, get_country_profile_data
-from models import train_and_predict, calculate_core_trajectory
+from forecasting import train_and_predict, calculate_core_trajectory
 from data_pipeline import run_pipeline
 from auth import create_access_token, verify_token, verify_password
 
@@ -19,27 +26,46 @@ from auth import create_access_token, verify_token, verify_password
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Security Check on Startup
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Running security checks on startup...")
+    
+    # Fail-fast if secrets are default or missing
+    if settings.JWT_SECRET_KEY == "super-secret-default-key-for-dev" or len(settings.JWT_SECRET_KEY) < 32:
+        raise RuntimeError("FATAL: JWT_SECRET_KEY is missing, left as default, or too short. Halting execution.")
+        
+    if settings.ADMIN_PASSWORD_HASH == "$2b$12$fNnTwqfq8OPbiWQK80zW0u1ubmVSnwFvpO59tEOazMlTYMMqHWI9K":
+        raise RuntimeError("FATAL: ADMIN_PASSWORD_HASH is left as default. Please change it. Halting execution.")
+        
+    yield
+    # Shutdown logic if any
+
+# Initialize Rate Limiter
+limiter = Limiter(key_func=get_remote_address)
+
 # Initialize FastAPI App
 app = FastAPI(
     title="SDG Trajectory - Global Outcome Forecaster",
     description="Backend API for SDG Trajectory Prediction and Policy Simulation",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Setup CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=settings.allowed_origins_list, 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Admin Config & Auth
+# Admin Config
 CONFIG_FILE = "admin_config.json"
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-# Default hash is pbkdf2_sha256 for "admin123"
-ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "$pbkdf2-sha256$29000$9B6jFCIEwHgvBeD8v7dWqg$foMVjew1Oi4CjF9IxhLSnzqvOBnKdw0SDyFHBIyPVrI")
 
 def get_admin_config():
     if not os.path.exists(CONFIG_FILE):
@@ -58,20 +84,19 @@ def set_admin_config(key, value):
     os.replace(temp_path, CONFIG_FILE)
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
 
 class ConfigRequest(BaseModel):
-    contamination: float
+    contamination: float = Field(..., ge=0.01, le=0.5)
 
 @app.post("/api/admin/login")
-def admin_login(req: LoginRequest):
-    if req.username == ADMIN_USERNAME and verify_password(req.password, ADMIN_PASSWORD_HASH):
+@limiter.limit("5/minute")
+def admin_login(request: Request, req: LoginRequest):
+    if req.username == settings.ADMIN_USERNAME and verify_password(req.password, settings.ADMIN_PASSWORD_HASH):
         token = create_access_token(data={"sub": req.username})
         return {"token": token}
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
-import threading
 
 sync_lock = threading.Lock()
 
@@ -91,8 +116,6 @@ def sync_data(background_tasks: BackgroundTasks, token: str = Depends(verify_tok
 
 @app.post("/api/admin/config")
 def update_config(req: ConfigRequest, token: str = Depends(verify_token)):
-    if not (0.01 <= req.contamination <= 0.5):
-        raise HTTPException(status_code=400, detail="Contamination must be strictly between 0.01 and 0.5")
     set_admin_config("contamination", req.contamination)
     return {"message": "Configuration updated successfully"}
 
@@ -105,7 +128,6 @@ class PredictionResponse(BaseModel):
     status: str
     policy_simulated_projection: Optional[float] = None
     ai_narrative: str
-
 
 class CountryProfileGoalResponse(BaseModel):
     goal: str
@@ -139,7 +161,8 @@ GOAL_NAMES = {
 }
 
 @app.get("/api/country/{countryCode}/profile", response_model=CountryProfileResponse)
-def get_country_profile(countryCode: str):
+@limiter.limit("100/minute")
+def get_country_profile(request: Request, countryCode: str):
     logger.info(f"API Request: /api/country/{countryCode}/profile")
     
     df = get_country_profile_data(countryCode)
@@ -182,7 +205,9 @@ def get_country_profile(countryCode: str):
     )
 
 @app.get("/api/predict", response_model=PredictionResponse)
+@limiter.limit("100/minute")
 async def predict_trajectory(
+    request: Request,
     country_code: str = Query(..., description="Human-readable country code (e.g., 'IND', 'USA')"),
     sdg_target: str = Query(..., description="Target or Goal (e.g., 'Goal1', '13.2')")
 ):
@@ -215,9 +240,10 @@ async def predict_trajectory(
     
     return response
 
-
 @app.get("/api/simulate", response_model=PredictionResponse)
+@limiter.limit("100/minute")
 async def simulate_policy(
+    request: Request,
     country_code: str = Query(..., description="Human-readable country code (e.g., 'IND', 'USA')"),
     sdg_target: str = Query(..., description="Target or Goal (e.g., 'Goal1', '13.2')"),
     policy_impact_multiplier: float = Query(1.0, description="Multiplier for rate of change (e.g. 1.2 for 20% faster growth)")
@@ -251,7 +277,8 @@ async def simulate_policy(
     return response
 
 @app.get("/api/globe/markers")
-def get_globe_markers():
+@limiter.limit("100/minute")
+def get_globe_markers(request: Request):
     """
     Returns the location coordinates and user metrics for rendering the 3D globe.
     """

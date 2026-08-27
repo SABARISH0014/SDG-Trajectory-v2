@@ -1,0 +1,100 @@
+name: Backend CI and Scheduled Sync
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Run on the 1st and 15th of every month at midnight UTC
+    - cron: '0 0 1,15 * *'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Continuous Integration Testing
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          
+      - name: Run Pytest
+        env:
+          # Dummy values to bypass pydantic-settings fail-fast startup checks
+          JWT_SECRET_KEY: "this-is-a-dummy-key-for-testing-purposes-only-which-is-long"
+          ADMIN_PASSWORD_HASH: "dummy-password-hash"
+        run: |
+          cd backend
+          pytest tests/
+
+  sync-data:
+    name: Scheduled Data Synchronization
+    # Only run this job if triggered by a schedule or manual dispatch
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Trigger Data Sync API
+        env:
+          PROD_API_URL: ${{ secrets.PROD_API_URL }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          echo "Authenticating with Production API..."
+          
+          # 1. Login and get JWT token
+          LOGIN_PAYLOAD=$(jq -n \
+            --arg un "$ADMIN_USERNAME" \
+            --arg pw "$ADMIN_PASSWORD" \
+            '{username: $un, password: $pw}')
+            
+          LOGIN_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -d "$LOGIN_PAYLOAD" \
+            "$PROD_API_URL/api/admin/login")
+            
+          LOGIN_BODY=$(echo "$LOGIN_RESPONSE" | sed -e '$d')
+          LOGIN_STATUS=$(echo "$LOGIN_RESPONSE" | tail -n 1)
+          
+          if [ "$LOGIN_STATUS" -ne 200 ]; then
+            echo "::error::Login failed with HTTP status $LOGIN_STATUS: $LOGIN_BODY"
+            exit 1
+          fi
+          
+          TOKEN=$(echo "$LOGIN_BODY" | jq -r '.token')
+          
+          if [ -z "$TOKEN" ] || [ "$TOKEN" == "null" ]; then
+            echo "::error::JWT token not found in the login response."
+            exit 1
+          fi
+          
+          echo "Successfully authenticated. Triggering data sync..."
+          
+          # 2. Trigger Sync endpoint
+          SYNC_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            "$PROD_API_URL/api/admin/sync")
+            
+          SYNC_BODY=$(echo "$SYNC_RESPONSE" | sed -e '$d')
+          SYNC_STATUS=$(echo "$SYNC_RESPONSE" | tail -n 1)
+          
+          if [ "$SYNC_STATUS" -ne 200 ]; then
+            echo "::error::Data Sync trigger failed with HTTP status $SYNC_STATUS: $SYNC_BODY"
+            exit 1
+          fi
+          
+          echo "Data Sync triggered successfully: $SYNC_BODY"

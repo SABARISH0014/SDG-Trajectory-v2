@@ -1,0 +1,18 @@
+{
+    "python.venvFolders": [
+        ".venv"
+    ],
+    "python.analysis.extraPaths": [
+        "backend"
+    ],
+    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportGeneralTypeIssues": "none",
+        "reportOptionalMemberAccess": "none",
+        "reportAttributeAccessIssue": "none",
+        "reportArgumentType": "none",
+        "reportReturnType": "none",
+        "reportCallIssue": "none",
+        "reportAssignmentType": "none"
+    }
+}
