@@ -88,6 +88,15 @@ def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multipli
     """
     Core mathematical logic for SDG trajectory regression.
     """
+    if df.empty:
+        logger.warning("Empty dataframe received. Triggering sparse data bypass.")
+        return {
+            "predictions": [],
+            "status": "Insufficient Data",
+            "baseline_value": None,
+            "projected_value_2030": None
+        }
+
     df_clean = df.dropna(subset=['IndicatorValue', 'Year']).copy()
     
     # Sparse Data Bypass (CRITICAL): if length is < 2

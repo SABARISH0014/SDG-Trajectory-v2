@@ -17,3 +17,5 @@ pydantic-settings
 slowapi
 pycountry-convert
 pytest
+libsql-client
+libsql-experimental

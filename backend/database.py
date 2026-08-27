@@ -2,9 +2,11 @@ import os
 import logging
 import pandas as pd
 import pycountry
-from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean, Index, text
-from sqlalchemy.orm import sessionmaker, declarative_base
-from functools import lru_cache
+import time
+import libsql_client
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -38,97 +40,127 @@ def translate_frontend_request(country_code: str, sdg_target: str) -> tuple[str,
     db_sdg_target = TARGET_TRANSLATION_MAP.get(sdg_target, sdg_target)
     return db_country_code, db_sdg_target
 
-def get_db_path() -> str:
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sdg_database.db')
+def get_turso_credentials():
+    url = os.environ.get("TURSO_DATABASE_URL", "")
+    token = os.environ.get("TURSO_AUTH_TOKEN", "")
+    if url.startswith("libsql://"):
+        url = url.replace("libsql://", "https://")
+    elif url.startswith("wss://"):
+        url = url.replace("wss://", "https://")
+    return url, token
 
-DB_PATH = get_db_path()
-DB_URL = f"sqlite:///{DB_PATH}"
+_ASYNC_CACHE = {}
+CACHE_TTL = 300
 
-# SQLAlchemy Engine and Session
-engine = create_engine(
-    DB_URL, 
-    connect_args={"check_same_thread": False}
-)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+def _check_cache(cache_key: str):
+    if cache_key in _ASYNC_CACHE:
+        entry = _ASYNC_CACHE[cache_key]
+        if time.time() - entry['timestamp'] < CACHE_TTL:
+            return entry['data'].copy()
+        else:
+            del _ASYNC_CACHE[cache_key]
+    return None
 
-class SDGGlobalData(Base):
-    __tablename__ = "sdg_global_data"
-    
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    CountryCode = Column(String(3), index=True, nullable=False)
-    SDG_Target = Column(String(10), index=True, nullable=False)
-    Year = Column(Integer, index=True, nullable=False)
-    IndicatorValue = Column(Float, nullable=True)
-    is_imputed = Column(Boolean, default=False)
-    is_regional_estimate = Column(Boolean, default=False)
+def _set_cache(cache_key: str, data: pd.DataFrame):
+    _ASYNC_CACHE[cache_key] = {
+        'timestamp': time.time(),
+        'data': data.copy() if not data.empty else data
+    }
 
-    __table_args__ = (
-        Index('idx_country_target_year', 'CountryCode', 'SDG_Target', 'Year', unique=True),
-    )
-
-def init_db():
-    """Create all tables in the database"""
-    Base.metadata.create_all(bind=engine)
-
-@lru_cache(maxsize=2048)
-def query_database(country_code: str, sdg_target: str) -> pd.DataFrame:
+async def query_database(country_code: str, sdg_target: str) -> pd.DataFrame:
     db_country, db_target = translate_frontend_request(country_code, sdg_target)
     
-    if not os.path.exists(DB_PATH):
-        logger.error(f"Database not found at {DB_PATH}")
-        return pd.DataFrame()
-        
-    try:
-        query = text("""
-        SELECT Year, IndicatorValue, is_imputed, is_regional_estimate
-        FROM sdg_global_data 
-        WHERE CountryCode = :country AND SDG_Target = :target
-        ORDER BY Year ASC
-        """)
-        
-        with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn, params={"country": db_country, "target": db_target})
-        
-        if not df.empty:
-            df = df.where(pd.notnull(df), None) # Clean NULLs to None
-            df['Year'] = df['Year'].astype(int)
-            df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
-            
-        return df
-    except Exception as e:
-        logger.error(f"Failed to query database: {e}")
+    cache_key = f"query_{db_country}_{db_target}"
+    cached_df = _check_cache(cache_key)
+    if cached_df is not None:
+        return cached_df
+    
+    url, token = get_turso_credentials()
+    if not url or not token:
+        logger.error("Missing Turso URL or Auth Token.")
         return pd.DataFrame()
 
-@lru_cache(maxsize=2048)
-def get_country_profile_data(country_code: str) -> pd.DataFrame:
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            sql = """
+                SELECT Year, IndicatorValue, is_imputed, is_regional_estimate
+                FROM sdg_global_data 
+                WHERE CountryCode = ? AND SDG_Target = ?
+                ORDER BY Year ASC
+            """
+            rs = await client.execute(sql, [db_country, db_target])
+            
+            if not rs.rows:
+                df = pd.DataFrame()
+            else:
+                records = []
+                for row in rs.rows:
+                    records.append({
+                        'Year': row[0],
+                        'IndicatorValue': row[1],
+                        'is_imputed': row[2],
+                        'is_regional_estimate': row[3]
+                    })
+                df = pd.DataFrame(records)
+                
+                df = df.where(pd.notnull(df), None)
+                df['Year'] = df['Year'].astype(int)
+                df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
+            
+            _set_cache(cache_key, df)
+            return df
+    except Exception as e:
+        logger.error(f"Failed to query database asynchronously: {e}")
+        return pd.DataFrame()
+
+async def get_country_profile_data(country_code: str) -> pd.DataFrame:
     db_country, _ = translate_frontend_request(country_code, "")
     
-    if not os.path.exists(DB_PATH):
+    cache_key = f"profile_{db_country}"
+    cached_df = _check_cache(cache_key)
+    if cached_df is not None:
+        return cached_df
+    
+    url, token = get_turso_credentials()
+    if not url or not token:
+        logger.error("Missing Turso URL or Auth Token.")
         return pd.DataFrame()
-        
+
     try:
-        query = text("""
-        SELECT SDG_Target, Year, IndicatorValue, is_imputed, is_regional_estimate
-        FROM sdg_global_data 
-        WHERE CountryCode = :country
-        ORDER BY SDG_Target ASC, Year ASC
-        """)
-        
-        with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn, params={"country": db_country})
-        
-        if not df.empty:
-            df = df.where(pd.notnull(df), None) # Clean NULLs to None
-            df['Year'] = df['Year'].astype(int)
-            df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            sql = """
+                SELECT SDG_Target, Year, IndicatorValue, is_imputed, is_regional_estimate
+                FROM sdg_global_data 
+                WHERE CountryCode = ?
+                ORDER BY SDG_Target ASC, Year ASC
+            """
+            rs = await client.execute(sql, [db_country])
             
-        return df
+            if not rs.rows:
+                df = pd.DataFrame()
+            else:
+                records = []
+                for row in rs.rows:
+                    records.append({
+                        'SDG_Target': row[0],
+                        'Year': row[1],
+                        'IndicatorValue': row[2],
+                        'is_imputed': row[3],
+                        'is_regional_estimate': row[4]
+                    })
+                df = pd.DataFrame(records)
+                
+                df = df.where(pd.notnull(df), None)
+                df['Year'] = df['Year'].astype(int)
+                df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
+            
+            _set_cache(cache_key, df)
+            return df
     except Exception as e:
-        logger.error(f"Failed to query country profile data: {e}")
+        logger.error(f"Failed to query country profile data asynchronously: {e}")
         return pd.DataFrame()
 
 def clear_db_cache():
-    """Clear the LRU cache when database updates occur."""
-    query_database.cache_clear()
-    get_country_profile_data.cache_clear()
+    """Clear the dictionary TTL cache when database updates occur."""
+    global _ASYNC_CACHE
+    _ASYNC_CACHE = {}

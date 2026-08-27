@@ -19,7 +19,6 @@ from slowapi.errors import RateLimitExceeded
 from config import settings
 from database import query_database, get_country_profile_data
 from forecasting import train_and_predict, calculate_core_trajectory
-from data_pipeline import run_pipeline
 from auth import create_access_token, verify_token, verify_password
 
 # Configure Logging
@@ -58,7 +57,11 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Setup CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list, 
+    allow_origins=[
+        "https://sdg-trajectory-v2.vercel.app",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -100,19 +103,7 @@ def admin_login(request: Request, req: LoginRequest):
 
 sync_lock = threading.Lock()
 
-@app.post("/api/admin/sync")
-def sync_data(background_tasks: BackgroundTasks, token: str = Depends(verify_token)):
-    if not sync_lock.acquire(blocking=False):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A data sync is already in progress.")
-    
-    def run_pipeline_with_lock():
-        try:
-            run_pipeline()
-        finally:
-            sync_lock.release()
-            
-    background_tasks.add_task(run_pipeline_with_lock)
-    return {"message": "Data sync started in background"}
+
 
 @app.post("/api/admin/config")
 def update_config(req: ConfigRequest, token: str = Depends(verify_token)):
@@ -162,10 +153,10 @@ GOAL_NAMES = {
 
 @app.get("/api/country/{countryCode}/profile", response_model=CountryProfileResponse)
 @limiter.limit("100/minute")
-def get_country_profile(request: Request, countryCode: str):
+async def get_country_profile(request: Request, countryCode: str):
     logger.info(f"API Request: /api/country/{countryCode}/profile")
     
-    df = get_country_profile_data(countryCode)
+    df = await get_country_profile_data(countryCode)
     goals_data = []
     
     from database import TARGET_TRANSLATION_MAP
@@ -217,7 +208,7 @@ async def predict_trajectory(
     logger.info(f"API Request: /api/predict | Country: {country_code}, Target: {sdg_target}")
     
     # Query database
-    df = query_database(country_code, sdg_target)
+    df = await query_database(country_code, sdg_target)
     
     if not df.empty:
         df_clean = df.where(pd.notnull(df), None)
@@ -253,7 +244,7 @@ async def simulate_policy(
     """
     logger.info(f"API Request: /api/simulate | Country: {country_code}, Target: {sdg_target}, Multiplier: {policy_impact_multiplier}")
     
-    df = query_database(country_code, sdg_target)
+    df = await query_database(country_code, sdg_target)
     
     if not df.empty:
         df_clean = df.where(pd.notnull(df), None)
