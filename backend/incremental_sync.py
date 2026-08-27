@@ -258,16 +258,25 @@ async def sync_to_database(df: pd.DataFrame):
 
     records = df.to_dict('records')
     insert_sql = """
-        INSERT INTO sdg_global_data (CountryCode, SDG_Target, Year, IndicatorValue, is_imputed, is_regional_estimate)
+        INSERT INTO sdg_global_data_staging (CountryCode, SDG_Target, Year, IndicatorValue, is_imputed, is_regional_estimate)
         VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(CountryCode, SDG_Target, Year) DO UPDATE SET
-            IndicatorValue=excluded.IndicatorValue,
-            is_imputed=excluded.is_imputed,
-            is_regional_estimate=excluded.is_regional_estimate
     """
 
     try:
         async with libsql_client.create_client(url, auth_token=token) as client:
+            # 1. Create fresh staging table
+            await client.execute("DROP TABLE IF EXISTS sdg_global_data_staging")
+            await client.execute("""
+                CREATE TABLE sdg_global_data_staging (
+                    CountryCode TEXT,
+                    SDG_Target TEXT,
+                    Year INTEGER,
+                    IndicatorValue REAL,
+                    is_imputed INTEGER,
+                    is_regional_estimate INTEGER
+                )
+            """)
+            
             statements = []
             for rec in records:
                 ind_val = rec['IndicatorValue']
@@ -296,7 +305,19 @@ async def sync_to_database(df: pd.DataFrame):
                 await client.batch(chunk)
                 logger.info(f"Database sync: Uploaded chunk {i} to {min(i+chunk_size, total_statements)}")
                 
-            logger.info(f"Database sync complete: Uploaded {total_statements} total records to Turso.")
+            # 3. Perform atomic table swap for zero downtime
+            logger.info("Performing zero-downtime table swap...")
+            swap_statements = [
+                libsql_client.Statement("DROP TABLE IF EXISTS sdg_global_data_old"),
+                libsql_client.Statement("ALTER TABLE sdg_global_data RENAME TO sdg_global_data_old"),
+                libsql_client.Statement("ALTER TABLE sdg_global_data_staging RENAME TO sdg_global_data"),
+                libsql_client.Statement("DROP TABLE IF EXISTS sdg_global_data_old"),
+                # Create index on the new table
+                libsql_client.Statement("CREATE INDEX IF NOT EXISTS idx_country_target_year ON sdg_global_data (CountryCode, SDG_Target, Year)")
+            ]
+            await client.batch(swap_statements)
+            
+            logger.info(f"Database sync complete: Swapped table with {total_statements} total records successfully.")
     except Exception as e:
         logger.error(f"FATAL: Error during database insert batch: {e}")
         sys.exit(1)
