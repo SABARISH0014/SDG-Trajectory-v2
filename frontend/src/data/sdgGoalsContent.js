@@ -2,6 +2,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 1,
     title: "No Poverty",
+    subtitle: "Progress and challenges in ending extreme poverty",
     whatItAchieves: "End poverty in all its forms everywhere. It aims to ensure social protection for the poor and vulnerable, increase access to basic services, and support people harmed by climate-related extreme events.",
     history: "Adopted in 2015 as part of the 2030 Agenda for Sustainable Development, Goal 1 builds on the legacy of the Millennium Development Goals (MDGs). While the MDGs halved extreme poverty, this goal commits to completely eradicating extreme poverty—measured as living on less than $1.25 a day—by 2030.",
     officialTargets: [
@@ -15,6 +16,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 2,
     title: "Zero Hunger",
+    subtitle: "Ending hunger and transforming food systems",
     whatItAchieves: "End hunger, achieve food security and improved nutrition, and promote sustainable agriculture. It focuses on ensuring access to safe, nutritious, and sufficient food all year round.",
     history: "Food security has long been a core UN mandate. Despite advancements in agriculture, one in nine people globally were undernourished when the SDGs were formed in 2015. Goal 2 was established to address both the immediate need for food and the systemic changes required in global agricultural systems to sustain future generations.",
     officialTargets: [
@@ -28,6 +30,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 3,
     title: "Good Health and Well-being",
+    subtitle: "Ensuring healthy lives and well-being at all ages",
     whatItAchieves: "Ensure healthy lives and promote well-being for all at all ages. It addresses major health priorities, including reproductive, maternal and child health, communicable diseases, and environmental diseases.",
     history: "Significant strides were made in increasing life expectancy and reducing child/maternal mortality under the MDGs, yet severe inequalities remained. Goal 3 was introduced to provide a comprehensive framework that includes universal health coverage, mental health, and the eradication of epidemics like AIDS, tuberculosis, and malaria.",
     officialTargets: [
@@ -41,6 +44,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 4,
     title: "Quality Education",
+    subtitle: "Inclusive education and lifelong learning for all",
     whatItAchieves: "Ensure inclusive and equitable quality education and promote lifelong learning opportunities for all. It focuses on both access to education and the quality of the learning environment.",
     history: "While the MDGs saw a massive increase in primary school enrollment, Goal 4 was created to address the 'learning crisis'—ensuring that children actually acquire foundational skills. It expands the focus from primary education to include early childhood development, vocational training, and higher education.",
     officialTargets: [
@@ -54,6 +58,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 5,
     title: "Gender Equality",
+    subtitle: "Empowering women and girls worldwide",
     whatItAchieves: "Achieve gender equality and empower all women and girls. It targets the elimination of discrimination, violence, and harmful practices against women and girls in both public and private spheres.",
     history: "Recognizing that gender equality is not only a fundamental human right but a necessary foundation for a peaceful, prosperous, and sustainable world, Goal 5 was established to tackle structural issues that previous frameworks missed, such as unpaid care work, reproductive rights, and women's leadership.",
     officialTargets: [
@@ -67,6 +72,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 6,
     title: "Clean Water and Sanitation",
+    subtitle: "Safe water and sanitation for every community",
     whatItAchieves: "Ensure availability and sustainable management of water and sanitation for all. It encompasses drinking water, sanitation facilities, water quality, and water-use efficiency.",
     history: "Water scarcity affects more than 40% of the global population. When drafting the 2030 Agenda, the UN recognized that access to safe water and sanitation is inextricably linked to health, poverty reduction, and environmental sustainability, requiring a dedicated, comprehensive goal.",
     officialTargets: [
@@ -80,6 +86,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 7,
     title: "Affordable and Clean Energy",
+    subtitle: "Universal access to sustainable energy solutions",
     whatItAchieves: "Ensure access to affordable, reliable, sustainable and modern energy for all. It emphasizes the transition to renewable energy sources and the improvement of energy efficiency.",
     history: "Energy is central to nearly every major challenge and opportunity the world faces today. Goal 7 was formulated as a direct response to the dual challenge of ending energy poverty (billions still rely on wood, coal, or animal waste for cooking) and mitigating climate change through clean energy.",
     officialTargets: [
@@ -93,6 +100,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 8,
     title: "Decent Work and Economic Growth",
+    subtitle: "Inclusive growth and productive employment",
     whatItAchieves: "Promote sustained, inclusive and sustainable economic growth, full and productive employment and decent work for all. It seeks to eradicate forced labor, human trafficking, and child labor.",
     history: "Following the 2008 global financial crisis, global unemployment remained high. The UN introduced Goal 8 to emphasize that economic growth must be inclusive and sustainable, ensuring that job creation does not come at the expense of workers' rights or the environment.",
     officialTargets: [
@@ -106,6 +114,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 9,
     title: "Industry, Innovation and Infrastructure",
+    subtitle: "Resilient infrastructure and sustainable industrialization",
     whatItAchieves: "Build resilient infrastructure, promote inclusive and sustainable industrialization and foster innovation. It underscores the importance of technological progress in finding lasting solutions to economic and environmental challenges.",
     history: "Recognizing that more than 4 billion people still lack access to the internet, and basic infrastructure is lacking in many developing nations, the UN created Goal 9 to drive investments in transport, irrigation, energy, and ICT to empower communities and enable sustainable industrial growth.",
     officialTargets: [
@@ -119,6 +128,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 10,
     title: "Reduced Inequalities",
+    subtitle: "Bridging the gap within and among countries",
     whatItAchieves: "Reduce inequality within and among countries. It calls for the social, economic, and political inclusion of all, irrespective of age, sex, disability, race, ethnicity, origin, religion, or economic status.",
     history: "While overall global wealth increased in the decades leading up to 2015, income inequality widened significantly. Goal 10 was introduced as a standalone goal to directly combat structural disparities, ensuring that no one is left behind in the pursuit of sustainable development.",
     officialTargets: [
@@ -132,6 +142,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 11,
     title: "Sustainable Cities and Communities",
+    subtitle: "Making cities inclusive, safe, and resilient",
     whatItAchieves: "Make cities and human settlements inclusive, safe, resilient and sustainable. It targets access to adequate housing, public transport, and the reduction of cities' environmental impact.",
     history: "With more than half of the world's population living in urban areas (projected to reach 60% by 2030), cities are the frontlines of sustainable development. Goal 11 was created to address the rapid urbanization that has led to slum growth, inadequate infrastructure, and heavy pollution.",
     officialTargets: [
@@ -145,6 +156,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 12,
     title: "Responsible Consumption and Production",
+    subtitle: "Sustainable patterns of production and consumption",
     whatItAchieves: "Ensure sustainable consumption and production patterns. It aims to reduce ecological footprints by changing the way we produce and consume goods and resources.",
     history: "Economic and social progress over the last century has been accompanied by environmental degradation that endangers the systems on which our future development depends. Goal 12 was formalized to decouple economic growth from resource use and promote circular economy principles.",
     officialTargets: [
@@ -158,6 +170,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 13,
     title: "Climate Action",
+    subtitle: "Urgent measures to combat climate change",
     whatItAchieves: "Take urgent action to combat climate change and its impacts. It calls for the integration of climate measures into national policies and strengthening resilience to climate-related hazards.",
     history: "Acknowledging that climate change is a global challenge that does not respect national borders, the UN established Goal 13 to complement the historic Paris Agreement (also adopted in 2015). It focuses on actionable mobilization to reduce greenhouse gas emissions and build climate resilience.",
     officialTargets: [
@@ -171,6 +184,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 14,
     title: "Life Below Water",
+    subtitle: "Conserving oceans, seas, and marine resources",
     whatItAchieves: "Conserve and sustainably use the oceans, seas and marine resources. It targets the reduction of marine pollution, the protection of coastal ecosystems, and the regulation of overfishing.",
     history: "Oceans cover three-quarters of the Earth's surface and represent 99% of the living space on the planet by volume. Despite this, marine ecosystems were facing unprecedented degradation from pollution and acidification. Goal 14 was introduced to protect these critical life-support systems.",
     officialTargets: [
@@ -184,6 +198,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 15,
     title: "Life on Land",
+    subtitle: "Protecting terrestrial ecosystems and biodiversity",
     whatItAchieves: "Protect, restore and promote sustainable use of terrestrial ecosystems, sustainably manage forests, combat desertification, and halt and reverse land degradation and halt biodiversity loss.",
     history: "Human life depends on the earth as much as the ocean for our sustenance and livelihoods. Goal 15 was established to address the alarming rate of deforestation and the extinction of species, recognizing that biodiversity is fundamental to human health and economic prosperity.",
     officialTargets: [
@@ -197,6 +212,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 16,
     title: "Peace, Justice and Strong Institutions",
+    subtitle: "Peaceful societies and accountable institutions",
     whatItAchieves: "Promote peaceful and inclusive societies, provide access to justice for all and build effective, accountable and inclusive institutions at all levels.",
     history: "For the first time in a global development framework, the UN recognized that peace, justice, and effective governance are not just desirable outcomes, but essential prerequisites for sustainable development. Goal 16 was added to address corruption, violence, and institutional failures.",
     officialTargets: [
@@ -210,6 +226,7 @@ export const sdgGoalsContent = [
   {
     goalNumber: 17,
     title: "Partnerships for the Goals",
+    subtitle: "Strengthening global cooperation for 2030",
     whatItAchieves: "Strengthen the means of implementation and revitalize the global partnership for sustainable development. It focuses on technology transfer, capacity building, and financial mobilization.",
     history: "The successful implementation of the SDGs requires a strong commitment to global partnership and cooperation. Goal 17 was designed as the glue that holds the 2030 Agenda together, acknowledging that no single country or organization can achieve these ambitious targets alone.",
     officialTargets: [

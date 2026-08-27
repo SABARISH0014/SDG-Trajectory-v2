@@ -69,7 +69,7 @@ def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
 
 async def generate_narrative(stats: dict) -> str:
     """
-    Uses OpenRouter API asynchronously to generate a 2-sentence summary of the trajectory.
+    Generates an intuitive, 2-sentence summary of the trajectory in plain layman language.
     Does NOT block the ASGI event loop, preventing FastAPI from hanging.
     """
     status = stats.get('status', 'Unknown')
@@ -77,13 +77,17 @@ async def generate_narrative(stats: dict) -> str:
     projection = stats.get('projected_value_2030', 'N/A')
     
     if status == 'Insufficient Data':
-        return "Not enough historical data available to generate a 2030 trajectory. Enhanced data collection is required."
+        return "Historical data coverage is currently insufficient to model a reliable 2030 forecast. Strengthened data monitoring is required."
         
-    fallback_narrative = f"The trajectory is currently classified as {status}, moving from a baseline of {baseline:.2f} to a projected {projection:.2f} by 2030. Strategic interventions may be necessary to ensure optimal target achievement."
+    if status == "On-track":
+        fallback_narrative = "The country is sustaining strong developmental momentum and is on course to meet its 2030 milestone under current conditions, improving local resilience and living standards."
+    elif status == "At-risk":
+        fallback_narrative = "Progress is advancing but at a fragile pace that risks falling short of 2030 commitments. Accelerated investment and administrative follow-through will be necessary."
+    else:
+        fallback_narrative = "The indicator trajectory is currently lagging behind required benchmarks. Targeted policy overhauls and increased resource mobilization are needed to reverse this trend."
     
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
-        logger.warning("OPENROUTER_API_KEY not found. Using fallback narrative.")
         return fallback_narrative
         
     try:
@@ -100,11 +104,11 @@ async def generate_narrative(stats: dict) -> str:
                     "messages": [
                         {
                             "role": "system",
-                            "content": "You are a professional data analyst. Provide a brief, insightful, 2-sentence summary of the provided SDG indicator trajectory statistics."
+                            "content": "You are a public policy communications specialist. Write a concise, 2-sentence explanation of what this SDG trend means for everyday citizens in simple, layman terms. Do NOT list raw numbers or technical regression jargon."
                         },
                         {
                             "role": "user",
-                            "content": f"The SDG target trajectory is currently '{status}'. It moves from a baseline value of {baseline:.2f} to a projected 2030 value of {projection:.2f}."
+                            "content": f"The national SDG target trajectory is classified as '{status}'. Baseline was {baseline} and projected 2030 is {projection}."
                         }
                     ]
                 }

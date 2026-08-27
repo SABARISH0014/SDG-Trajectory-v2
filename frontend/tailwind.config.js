@@ -6,6 +6,10 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        serif: ['"Source Serif 4"', 'Georgia', '"Times New Roman"', 'serif'],
+        sans: ['"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
+      },
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
@@ -22,6 +26,9 @@ export default {
           foreground: "hsl(var(--accent-foreground))",
         },
         border: "hsl(var(--border))",
+        navy: '#1B2A4A',
+        cream: '#F7F5F0',
+        'warm-gray': '#2D3748',
       },
       borderRadius: {
         lg: "var(--radius)",
