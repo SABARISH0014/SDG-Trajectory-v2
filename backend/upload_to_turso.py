@@ -56,10 +56,12 @@ async def migrate_to_cloud():
             create_cols.append(f"{col_name} {col_type}")
         
         create_table_sql = f"""
-            CREATE TABLE IF NOT EXISTS sdg_global_data (
-                {', '.join(create_cols)}
+            CREATE TABLE sdg_global_data (
+                {', '.join(create_cols)},
+                UNIQUE(CountryCode, SDG_Target, Year)
             );
         """
+        await client.execute("DROP TABLE IF EXISTS sdg_global_data;")
         await client.execute(create_table_sql)
         print("✅ Cloud table schema verified.")
         

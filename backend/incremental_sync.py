@@ -16,26 +16,6 @@ logger = logging.getLogger(__name__)
 # Dynamically extract all valid UN ISO3 Country Codes using pycountry
 ISO3_CODES = [country.alpha_3 for country in pycountry.countries]
 
-SDG_TARGETS = [
-    '1.1', '1.2', '1.3', '1.4', '1.5', '1.a', '1.b',
-    '2.1', '2.2', '2.3', '2.4', '2.5', '2.a', '2.b', '2.c',
-    '3.1', '3.2', '3.3', '3.4', '3.5', '3.6', '3.7', '3.8', '3.9', '3.a', '3.b', '3.c', '3.d',
-    '4.1', '4.2', '4.3', '4.4', '4.5', '4.6', '4.7', '4.a', '4.b', '4.c',
-    '5.1', '5.2', '5.3', '5.4', '5.5', '5.6', '5.a', '5.b', '5.c',
-    '6.1', '6.2', '6.3', '6.4', '6.5', '6.6', '6.a', '6.b',
-    '7.1', '7.2', '7.3', '7.a', '7.b',
-    '8.1', '8.2', '8.3', '8.4', '8.5', '8.6', '8.7', '8.8', '8.9', '8.10', '8.a', '8.b',
-    '9.1', '9.2', '9.3', '9.4', '9.5', '9.a', '9.b', '9.c',
-    '10.1', '10.2', '10.3', '10.4', '10.5', '10.6', '10.7', '10.a', '10.b', '10.c',
-    '11.1', '11.2', '11.3', '11.4', '11.5', '11.6', '11.7', '11.a', '11.b', '11.c',
-    '12.1', '12.2', '12.3', '12.4', '12.5', '12.6', '12.7', '12.8', '12.a', '12.b', '12.c',
-    '13.1', '13.2', '13.3', '13.a', '13.b',
-    '14.1', '14.2', '14.3', '14.4', '14.5', '14.6', '14.7', '14.a', '14.b', '14.c',
-    '15.1', '15.2', '15.3', '15.4', '15.5', '15.6', '15.7', '15.8', '15.9', '15.a', '15.b', '15.c',
-    '16.1', '16.2', '16.3', '16.4', '16.5', '16.6', '16.7', '16.8', '16.9', '16.10', '16.a', '16.b',
-    '17.1', '17.2', '17.3', '17.4', '17.5', '17.6', '17.7', '17.8', '17.9', '17.10', '17.11', '17.12', '17.13', '17.14', '17.15', '17.16', '17.17', '17.18', '17.19'
-]
-
 def standardize_country_code(raw_code: str) -> str:
     if pd.isna(raw_code): return None
     raw_str = str(raw_code).strip().upper()
@@ -155,7 +135,8 @@ def get_continent(iso3_code: str) -> str:
     except:
         return 'Unknown'
 
-def build_master_grid(all_dfs: list) -> pd.DataFrame:
+def process_incremental_data(all_dfs: list) -> pd.DataFrame:
+    """Processes only the newly fetched API data for a surgical update."""
     combined_df = pd.concat(all_dfs, ignore_index=True)
     
     def get_priority(row):
@@ -208,37 +189,33 @@ def build_master_grid(all_dfs: list) -> pd.DataFrame:
             
     final_df = pd.concat(imputed_dfs, ignore_index=True) if imputed_dfs else pd.DataFrame()
     
-    years = list(range(2015, 2026))
-    master_index = pd.MultiIndex.from_product(
-        [ISO3_CODES, SDG_TARGETS, years],
-        names=["CountryCode", "SDG_Target", "Year"]
-    )
-    master_df = pd.DataFrame(index=master_index).reset_index()
+    # We DO NOT generate the Cartesian master grid here anymore. 
+    # This prevents overwriting the rest of the database with NULLs.
     
-    final_master_df = pd.merge(master_df, final_df, on=["CountryCode", "SDG_Target", "Year"], how="left")
-    final_master_df["is_imputed"] = final_master_df["is_imputed"].fillna(False)
-    final_master_df["is_regional_estimate"] = final_master_df["is_regional_estimate"].fillna(False)
+    logger.info("Computing Regional Averages for newly fetched incremental data...")
+    final_df['Continent'] = final_df['CountryCode'].apply(get_continent)
     
-    logger.info("Computing True Continental Regional Averages...")
-    final_master_df['Continent'] = final_master_df['CountryCode'].apply(get_continent)
-    
-    missing_mask = final_master_df['IndicatorValue'].isna()
+    missing_mask = final_df['IndicatorValue'].isna()
     if missing_mask.any():
-        real_only_df = final_master_df[(~final_master_df['is_imputed']) & (~final_master_df['is_regional_estimate'])].dropna(subset=['IndicatorValue'])
-        regional_avg = real_only_df.groupby(['Continent', 'SDG_Target', 'Year'])['IndicatorValue'].mean().reset_index()
-        regional_avg = regional_avg.rename(columns={'IndicatorValue': 'RegionalAvg'})
-        
-        final_master_df = final_master_df.merge(regional_avg, on=['Continent', 'SDG_Target', 'Year'], how='left')
-        
-        fallback_applied_mask = final_master_df['IndicatorValue'].isna() & final_master_df['RegionalAvg'].notna()
-        final_master_df.loc[fallback_applied_mask, 'IndicatorValue'] = final_master_df.loc[fallback_applied_mask, 'RegionalAvg']
-        final_master_df.loc[fallback_applied_mask, 'is_imputed'] = True
-        final_master_df.loc[fallback_applied_mask, 'is_regional_estimate'] = True
-        
-        final_master_df = final_master_df.drop(columns=['RegionalAvg'])
+        real_only_df = final_df[(~final_df['is_imputed']) & (~final_df['is_regional_estimate'])].dropna(subset=['IndicatorValue'])
+        if not real_only_df.empty:
+            regional_avg = real_only_df.groupby(['Continent', 'SDG_Target', 'Year'])['IndicatorValue'].mean().reset_index()
+            regional_avg = regional_avg.rename(columns={'IndicatorValue': 'RegionalAvg'})
+            
+            final_df = final_df.merge(regional_avg, on=['Continent', 'SDG_Target', 'Year'], how='left')
+            
+            fallback_applied_mask = final_df['IndicatorValue'].isna() & final_df['RegionalAvg'].notna()
+            final_df.loc[fallback_applied_mask, 'IndicatorValue'] = final_df.loc[fallback_applied_mask, 'RegionalAvg']
+            final_df.loc[fallback_applied_mask, 'is_imputed'] = True
+            final_df.loc[fallback_applied_mask, 'is_regional_estimate'] = True
+            
+            final_df = final_df.drop(columns=['RegionalAvg'])
 
-    final_master_df = final_master_df.drop(columns=['Continent'])
-    return final_master_df
+    final_df = final_df.drop(columns=['Continent'])
+    
+    # Filter out remaining nulls from interpolation gaps that couldn't be filled
+    final_df = final_df.dropna(subset=['IndicatorValue'])
+    return final_df
 
 def get_turso_credentials():
     load_dotenv()
@@ -248,7 +225,7 @@ def get_turso_credentials():
 
 async def sync_to_database(df: pd.DataFrame):
     if df.empty:
-        logger.info("No data to sync.")
+        logger.info("No new data to sync.")
         return
         
     url, token = get_turso_credentials()
@@ -257,26 +234,19 @@ async def sync_to_database(df: pd.DataFrame):
         sys.exit(1)
 
     records = df.to_dict('records')
+    
+    # We use ON CONFLICT DO UPDATE because upload_to_turso.py now creates a UNIQUE constraint!
     insert_sql = """
-        INSERT INTO sdg_global_data_staging (CountryCode, SDG_Target, Year, IndicatorValue, is_imputed, is_regional_estimate)
+        INSERT INTO sdg_global_data (CountryCode, SDG_Target, Year, IndicatorValue, is_imputed, is_regional_estimate)
         VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(CountryCode, SDG_Target, Year) DO UPDATE SET
+            IndicatorValue=excluded.IndicatorValue,
+            is_imputed=excluded.is_imputed,
+            is_regional_estimate=excluded.is_regional_estimate
     """
 
     try:
         async with libsql_client.create_client(url, auth_token=token) as client:
-            # 1. Create fresh staging table
-            await client.execute("DROP TABLE IF EXISTS sdg_global_data_staging")
-            await client.execute("""
-                CREATE TABLE sdg_global_data_staging (
-                    CountryCode TEXT,
-                    SDG_Target TEXT,
-                    Year INTEGER,
-                    IndicatorValue REAL,
-                    is_imputed INTEGER,
-                    is_regional_estimate INTEGER
-                )
-            """)
-            
             statements = []
             for rec in records:
                 ind_val = rec['IndicatorValue']
@@ -295,35 +265,22 @@ async def sync_to_database(df: pd.DataFrame):
                 ]
                 statements.append(libsql_client.Statement(insert_sql, args))
 
-            # Batch execution
             chunk_size = 500
             total_statements = len(statements)
-            logger.info(f"Preparing to upload {total_statements} records in batches of {chunk_size}...")
+            logger.info(f"Surgically updating {total_statements} records in batches of {chunk_size}...")
             
             for i in range(0, total_statements, chunk_size):
                 chunk = statements[i:i + chunk_size]
                 await client.batch(chunk)
                 logger.info(f"Database sync: Uploaded chunk {i} to {min(i+chunk_size, total_statements)}")
                 
-            # 3. Perform atomic table swap for zero downtime
-            logger.info("Performing zero-downtime table swap...")
-            swap_statements = [
-                libsql_client.Statement("DROP TABLE IF EXISTS sdg_global_data_old"),
-                libsql_client.Statement("ALTER TABLE sdg_global_data RENAME TO sdg_global_data_old"),
-                libsql_client.Statement("ALTER TABLE sdg_global_data_staging RENAME TO sdg_global_data"),
-                libsql_client.Statement("DROP TABLE IF EXISTS sdg_global_data_old"),
-                # Create index on the new table
-                libsql_client.Statement("CREATE INDEX IF NOT EXISTS idx_country_target_year ON sdg_global_data (CountryCode, SDG_Target, Year)")
-            ]
-            await client.batch(swap_statements)
-            
-            logger.info(f"Database sync complete: Swapped table with {total_statements} total records successfully.")
+            logger.info(f"Database sync complete: Surgically updated {total_statements} records in Turso.")
     except Exception as e:
         logger.error(f"FATAL: Error during database insert batch: {e}")
         sys.exit(1)
 
 async def main():
-    logger.info("Starting automated incremental sync pipeline...")
+    logger.info("Starting true automated incremental sync pipeline...")
     
     all_data_frames = []
     
@@ -349,9 +306,9 @@ async def main():
         logger.error("FATAL: No data fetched from any API. Aborting sync.")
         sys.exit(1)
         
-    master_df = build_master_grid(all_data_frames)
+    incremental_df = process_incremental_data(all_data_frames)
     
-    await sync_to_database(master_df)
+    await sync_to_database(incremental_df)
     
     logger.info("Incremental sync pipeline finished successfully.")
 
