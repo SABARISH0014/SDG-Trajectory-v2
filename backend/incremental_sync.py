@@ -85,9 +85,42 @@ def fetch_faostat_data() -> pd.DataFrame:
         r = requests.get(url, timeout=15)
         r.raise_for_status()
         data = r.json().get('data', [])
-        if not data: return pd.DataFrame()
-        df = pd.DataFrame(columns=['CountryCode', 'SDG_Target', 'Year', 'IndicatorValue', 'Source', 'is_imputed'])
-        return df
+        if not data:
+            return pd.DataFrame()
+            
+        df = pd.DataFrame(data)
+        if df.empty:
+            return pd.DataFrame()
+            
+        df.columns = [str(c).lower() for c in df.columns]
+        
+        iso_col = next((c for c in df.columns if 'iso3' in c), None)
+        if not iso_col:
+            iso_col = next((c for c in df.columns if 'area code' in c and 'm49' not in c), None)
+        if not iso_col:
+            iso_col = next((c for c in df.columns if 'area' in c), None)
+            
+        year_col = next((c for c in df.columns if 'year' in c and 'code' not in c), None)
+        val_col = next((c for c in df.columns if 'value' in c), None)
+        
+        if not iso_col or not year_col or not val_col:
+            return pd.DataFrame()
+            
+        df = df.rename(columns={iso_col: 'CountryCode', year_col: 'Year', val_col: 'IndicatorValue'})
+        df['SDG_Target'] = '2.1'
+        df['Source'] = 'FAOSTAT'
+        df['is_imputed'] = False
+        
+        unique_codes = df['CountryCode'].dropna().unique()
+        code_map = {code: standardize_country_code(code) for code in unique_codes}
+        df['CountryCode'] = df['CountryCode'].map(code_map)
+        df = df.dropna(subset=['CountryCode', 'IndicatorValue'])
+        
+        df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
+        df = df[df['Year'].between(2015, 2025)]
+        
+        logger.info(f"Fetched {len(df)} records from FAOSTAT.")
+        return df[['CountryCode', 'SDG_Target', 'Year', 'IndicatorValue', 'Source', 'is_imputed']]
     except Exception as e:
         logger.warning(f"Failed to fetch FAOSTAT data, falling back gracefully: {e}")
         return pd.DataFrame()
@@ -120,11 +153,69 @@ def fetch_unicef_data() -> pd.DataFrame:
 
 def fetch_ilostat_data() -> pd.DataFrame:
     logger.info("Fetching real ILOSTAT data (Goal 8) via SDMX...")
-    return pd.DataFrame()
+    try:
+        import sdmx
+        ilo = sdmx.Request('ILO')
+        data_msg = ilo.data('DF_SDG_0852_SEX_OCU_RT_A', params={'startPeriod': '2015'})
+        df = sdmx.to_pandas(data_msg).reset_index()
+        
+        if df.empty:
+            return pd.DataFrame()
+            
+        df.columns = [str(c).upper() for c in df.columns]
+        val_col = 'VALUE' if 'VALUE' in df.columns else df.columns[-1]
+        
+        df = df.rename(columns={'REF_AREA': 'CountryCode', 'TIME_PERIOD': 'Year', val_col: 'IndicatorValue'})
+        df['SDG_Target'] = '8.5'
+        df['Source'] = 'ILOSTAT'
+        df['is_imputed'] = False
+        
+        unique_codes = df['CountryCode'].dropna().unique()
+        code_map = {code: standardize_country_code(code) for code in unique_codes}
+        df['CountryCode'] = df['CountryCode'].map(code_map)
+        df = df.dropna(subset=['CountryCode', 'IndicatorValue'])
+        
+        df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
+        df = df[df['Year'].between(2015, 2025)]
+        
+        logger.info(f"Fetched {len(df)} records from ILOSTAT.")
+        return df[['CountryCode', 'SDG_Target', 'Year', 'IndicatorValue', 'Source', 'is_imputed']]
+    except Exception as e:
+        logger.warning(f"Failed to fetch ILOSTAT SDMX data, falling back: {e}")
+        return pd.DataFrame()
 
 def fetch_unesco_data() -> pd.DataFrame:
     logger.info("Fetching real UNESCO data (Goal 4) via SDMX...")
-    return pd.DataFrame()
+    try:
+        import sdmx
+        uis = sdmx.Request('UNESCO')
+        data_msg = uis.data('SDG4', params={'startPeriod': '2015'})
+        df = sdmx.to_pandas(data_msg).reset_index()
+        
+        if df.empty:
+            return pd.DataFrame()
+            
+        df.columns = [str(c).upper() for c in df.columns]
+        val_col = 'VALUE' if 'VALUE' in df.columns else df.columns[-1]
+        
+        df = df.rename(columns={'REF_AREA': 'CountryCode', 'TIME_PERIOD': 'Year', val_col: 'IndicatorValue'})
+        df['SDG_Target'] = '4.1'
+        df['Source'] = 'UNESCO'
+        df['is_imputed'] = False
+        
+        unique_codes = df['CountryCode'].dropna().unique()
+        code_map = {code: standardize_country_code(code) for code in unique_codes}
+        df['CountryCode'] = df['CountryCode'].map(code_map)
+        df = df.dropna(subset=['CountryCode', 'IndicatorValue'])
+        
+        df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
+        df = df[df['Year'].between(2015, 2025)]
+        
+        logger.info(f"Fetched {len(df)} records from UNESCO.")
+        return df[['CountryCode', 'SDG_Target', 'Year', 'IndicatorValue', 'Source', 'is_imputed']]
+    except Exception as e:
+        logger.warning(f"Failed to fetch UNESCO SDMX data, falling back: {e}")
+        return pd.DataFrame()
 
 def get_continent(iso3_code: str) -> str:
     try:
