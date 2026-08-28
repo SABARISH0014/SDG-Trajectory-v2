@@ -103,7 +103,24 @@ def admin_login(request: Request, req: LoginRequest):
 
 sync_lock = threading.Lock()
 
+def run_sync_task():
+    import subprocess
+    try:
+        logger.info("Executing background sync pipeline...")
+        subprocess.run(["python", "incremental_sync.py"], check=True)
+        logger.info("Background sync pipeline completed successfully.")
+    except Exception as e:
+        logger.error(f"Background sync task failed: {e}")
+    finally:
+        sync_lock.release()
 
+@app.post("/api/admin/sync")
+def trigger_sync(background_tasks: BackgroundTasks, token: str = Depends(verify_token)):
+    if not sync_lock.acquire(blocking=False):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Data sync is already in progress.")
+    
+    background_tasks.add_task(run_sync_task)
+    return {"message": "Data sync started in background"}
 
 @app.post("/api/admin/config")
 def update_config(req: ConfigRequest, token: str = Depends(verify_token)):

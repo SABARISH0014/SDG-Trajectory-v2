@@ -59,6 +59,28 @@ const SDG_SHORT_TITLES = {
   16: 'Peace, Justice & Strong Institutions', 17: 'Partnerships for the Goals',
 };
 
+// Task 3: Dynamic SDG Context Panel
+const SDG_CONTEXT_MAP = {
+  '1.1': 'Eradicate extreme poverty for all people everywhere. Tracking the proportion of the population living below the international poverty line is critical to ensuring baseline economic security.',
+  '2.1': 'End hunger and ensure access by all people to safe, nutritious and sufficient food all year round. This metric tracks the prevalence of undernourishment in the population.',
+  '3.1': 'Reduce the global maternal mortality ratio. Ensuring safe childbirth and maternal healthcare is a fundamental indicator of a robust health system.',
+  '3.2': 'End preventable deaths of newborns and children under 5 years of age. Child mortality rates serve as a crucial proxy for broader societal health and well-being.',
+  '4.1': 'Ensure that all girls and boys complete free, equitable and quality primary and secondary education. Measuring reading and math proficiency is key to human capital development.',
+  '8.5': 'Achieve full and productive employment and decent work for all women and men. Unemployment rates are a direct measure of economic health and labor market efficiency.',
+  '9.1': 'Develop quality, reliable, sustainable and resilient infrastructure. Tracking passenger and freight volumes provides insight into economic integration and mobility.',
+  '13.2': 'Integrate climate change measures into national policies, strategies and planning. Monitoring CO2 emissions is the primary mechanism to combat global warming and environmental degradation.'
+};
+
+const getSDGContext = (targetCode) => {
+  return SDG_CONTEXT_MAP[targetCode] || 'Strategic progress towards this target is crucial for achieving the broader SDG goal by 2030. Tracking this indicator helps ensure national policy remains aligned with global sustainability objectives.';
+};
+
+// Task 2: Large Number Formatting (UX Improvement)
+const formatLargeNumber = (value) => {
+  if (value === null || value === undefined) return '';
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
+};
+
 export default function GoalPage() {
   const { goalNumber } = useParams();
   const navigate = useNavigate();
@@ -92,20 +114,37 @@ export default function GoalPage() {
       });
       
       const { historical_data, predictions, status, ai_narrative } = response.data;
-      const chartData = [];
       
-      historical_data.forEach(d => {
-        chartData.push({ Year: d.Year, actualValue: d.IndicatorValue, predictedValue: null });
-      });
+      // Map both arrays
+      const histMapped = historical_data.map(d => ({ Year: parseInt(d.Year), actualValue: d.IndicatorValue, predictedValue: null }));
+      const predMapped = predictions.map(p => ({ Year: parseInt(p.Year), actualValue: null, predictedValue: p.PredictedValue }));
+      
+      // Combine and strictly sort by Year
+      let chartData = [...histMapped, ...predMapped];
+      chartData.sort((a, b) => a.Year - b.Year);
 
-      if (historical_data.length > 0 && predictions.length > 0) {
-        const lastActual = historical_data[historical_data.length - 1];
-        chartData[chartData.length - 1].predictedValue = lastActual.IndicatorValue;
-      }
-      
-      predictions.forEach(p => {
-        chartData.push({ Year: p.Year, actualValue: null, predictedValue: p.PredictedValue });
+      // Identify unique years and merge overlaps
+      const mergedDataMap = new Map();
+      chartData.forEach(item => {
+        if (mergedDataMap.has(item.Year)) {
+          const existing = mergedDataMap.get(item.Year);
+          mergedDataMap.set(item.Year, {
+            ...existing,
+            actualValue: item.actualValue !== null ? item.actualValue : existing.actualValue,
+            predictedValue: item.predictedValue !== null ? item.predictedValue : existing.predictedValue
+          });
+        } else {
+          mergedDataMap.set(item.Year, item);
+        }
       });
+      chartData = Array.from(mergedDataMap.values()).sort((a, b) => a.Year - b.Year);
+
+      // The "Bridge": stitch the solid line and dashed line together
+      const lastHistoricalIndex = chartData.map(d => d.actualValue !== null).lastIndexOf(true);
+      if (lastHistoricalIndex !== -1) {
+        // Copy the last historical actual value into its predictedValue slot to anchor the forecast line
+        chartData[lastHistoricalIndex].predictedValue = chartData[lastHistoricalIndex].actualValue;
+      }
 
       setDashboardData({ status, ai_narrative, chart_data: chartData });
     } catch (error) {
@@ -137,7 +176,9 @@ export default function GoalPage() {
     const headers = ['Year', 'ActualValue', 'PredictedValue'];
     const csvRows = [headers.join(',')];
     dashboardData.chart_data.forEach(row => {
-      csvRows.push(`${row.Year},${row.actualValue || ''},${row.predictedValue || ''}`);
+      const actual = row.actualValue !== null && row.actualValue !== undefined ? row.actualValue : '';
+      const predicted = row.predictedValue !== null && row.predictedValue !== undefined ? row.predictedValue : '';
+      csvRows.push(`${row.Year},${actual},${predicted}`);
     });
     const csvString = csvRows.join('\n');
     const blob = new Blob([csvString], { type: 'text/csv' });
@@ -155,11 +196,15 @@ export default function GoalPage() {
     if (!chartRef.current) return;
     const svgElement = chartRef.current.querySelector('svg');
     if (!svgElement) return;
+    
     const serializer = new XMLSerializer();
     let source = serializer.serializeToString(svgElement);
     if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
         source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
     }
+    // Add default font family to the SVG source so it renders nicely in the PNG
+    source = source.replace('<svg ', '<svg style="font-family: sans-serif;" ');
+
     const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
     const url = window.URL.createObjectURL(svgBlob);
     const img = new Image();
@@ -499,14 +544,15 @@ export default function GoalPage() {
                                 tickLine={false} 
                                 axisLine={{ stroke: '#cbd5e1' }} 
                                 tick={{fill: '#64748b', fontSize: 11}}
-                                tickFormatter={(val) => formatMetricValue(val)} 
-                                width={65}
+                                tickFormatter={(val) => formatLargeNumber(val)} 
+                                width={75}
                                 label={{ value: targetInfo.unit, angle: -90, position: 'insideLeft', offset: -5, fill: '#475569', fontSize: 11, fontWeight: 500 }}
                               />
                               <Tooltip 
                                 contentStyle={{ borderRadius: '6px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} 
                                 labelStyle={{ fontWeight: 'bold', color: '#1B2A4A' }}
-                                formatter={(val) => [`${formatMetricValue(val)} ${targetInfo.unit}`, '']}
+                                formatter={(val, name) => [`${formatLargeNumber(val)} ${targetInfo.unit}`, name === 'actualValue' ? 'Historical Data' : 'Forecast']}
+                                labelFormatter={(label) => `Year: ${label}`}
                               />
                               <Legend verticalAlign="top" height={36} iconType="circle" />
                               <Line name="Historical Data" type="monotone" dataKey="actualValue" stroke={goalColor} strokeWidth={2.5} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: goalColor, strokeWidth: 2 }} />
@@ -543,7 +589,8 @@ export default function GoalPage() {
                         <BookOpen className="w-4 h-4 text-slate-400" /> Target Overview
                       </h4>
                       <p className="text-sm text-slate-600 leading-relaxed">
-                        {getTargetDetails(selectedTarget, goalNum).impactOnGoal}
+                        <strong className="font-semibold text-slate-800">SDG Context: </strong>
+                        {getSDGContext(selectedTarget)}
                       </p>
                     </div>
 
