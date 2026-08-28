@@ -55,7 +55,7 @@ def fetch_who_gho_data() -> pd.DataFrame:
     logger.info("Fetching real WHO GHO data (Goal 3) via REST API...")
     url = "https://ghoapi.azureedge.net/api/MDG_0000000026"
     try:
-        r = requests.get(url, timeout=15)
+        r = requests.get(url, timeout=60)
         r.raise_for_status()
         data = r.json().get('value', [])
         df = pd.DataFrame(data)
@@ -82,7 +82,7 @@ def fetch_faostat_data() -> pd.DataFrame:
     logger.info("Fetching real FAOSTAT data (Goal 2)...")
     try:
         url = "https://fenixservices.fao.org/api/v1.0/en/data/FS?domains=FS&indicators=21010&years=2015,2016,2017,2018,2019,2020,2021,2022"
-        r = requests.get(url, timeout=15)
+        r = requests.get(url, timeout=60)
         r.raise_for_status()
         data = r.json().get('data', [])
         if not data:
@@ -129,7 +129,7 @@ def fetch_unicef_data() -> pd.DataFrame:
     logger.info("Fetching real UNICEF data (Goal 3.2) via CSV format...")
     url = "https://sdmx.data.unicef.org/ws/public/sdmxapi/rest/data/UNICEF,GLOBAL_DATAFLOW,1.0/.MNCH_MMR...?format=csv"
     try:
-        r = requests.get(url, timeout=15)
+        r = requests.get(url, timeout=60)
         r.raise_for_status()
         df = pd.read_csv(io.StringIO(r.text))
         if df.empty: return pd.DataFrame()
@@ -155,7 +155,10 @@ def fetch_ilostat_data() -> pd.DataFrame:
     logger.info("Fetching real ILOSTAT data (Goal 8) via SDMX...")
     try:
         import sdmx
-        ilo = sdmx.Request('ILO')
+        import requests
+        session = requests.Session()
+        session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        ilo = sdmx.Request('ILO', session=session)
         data_msg = ilo.data('DF_SDG_0852_SEX_OCU_RT_A', params={'startPeriod': '2015'})
         df = sdmx.to_pandas(data_msg).reset_index()
         
@@ -188,7 +191,10 @@ def fetch_unesco_data() -> pd.DataFrame:
     logger.info("Fetching real UNESCO data (Goal 4) via SDMX...")
     try:
         import sdmx
-        uis = sdmx.Request('UNESCO')
+        import requests
+        session = requests.Session()
+        session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        uis = sdmx.Request('UNESCO', session=session)
         data_msg = uis.data('SDG4', params={'startPeriod': '2015'})
         df = sdmx.to_pandas(data_msg).reset_index()
         
