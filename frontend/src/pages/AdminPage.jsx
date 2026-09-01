@@ -4,6 +4,9 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { ShieldCheck, Database, Sliders, LogIn, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
+import { Input } from '../components/ui/input';
+import { Slider } from '../components/ui/slider';
 
 export default function AdminPage() {
   const [token, setToken] = useState(null);
@@ -75,47 +78,47 @@ export default function AdminPage() {
           </Link>
         </header>
         <div className="flex-1 flex items-center justify-center p-6">
-          <div className="w-full max-w-md border border-slate-200 bg-white p-8">
-            <div className="text-center space-y-2 mb-6">
-              <div className="mx-auto bg-rose-100 w-12 h-12 rounded-full flex items-center justify-center mb-3">
+          <Card className="w-full max-w-md bg-white">
+            <CardHeader className="text-center space-y-2 mb-2">
+              <div className="mx-auto bg-rose-100 w-12 h-12 rounded-full flex items-center justify-center mb-1">
                 <ShieldCheck className="w-6 h-6 text-rose-600" />
               </div>
-              <h2 className="text-2xl font-serif font-bold text-warm-gray">Admin Portal</h2>
-              <p className="text-sm text-slate-500">Enter your credentials to access system settings.</p>
-            </div>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Username</label>
-                <input 
-                  type="text" 
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full h-10 px-3 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Password</label>
-                <input 
-                  type="password" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full h-10 px-3 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  required
-                />
-              </div>
-              
-              {loginError && (
-                <div className="p-3 bg-red-50 text-red-600 text-sm border border-red-100">
-                  {loginError}
+              <CardTitle className="text-2xl font-serif font-bold text-warm-gray">Admin Portal</CardTitle>
+              <CardDescription className="text-sm text-slate-500">Enter your credentials to access system settings.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Username</label>
+                  <Input 
+                    type="text" 
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                  />
                 </div>
-              )}
-              
-              <Button type="submit" disabled={loading} className="w-full h-10 bg-rose-600 hover:bg-rose-700 text-white">
-                {loading ? "Authenticating..." : <><LogIn className="w-4 h-4 mr-2" /> Sign In</>}
-              </Button>
-            </form>
-          </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Password</label>
+                  <Input 
+                    type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                
+                {loginError && (
+                  <div className="p-3 bg-red-50 text-red-600 text-sm border border-red-100 rounded-md">
+                    {loginError}
+                  </div>
+                )}
+                
+                <Button type="submit" disabled={loading} className="w-full h-10 bg-rose-600 hover:bg-rose-700 text-white">
+                  {loading ? "Authenticating..." : <><LogIn className="w-4 h-4 mr-2" /> Sign In</>}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
@@ -180,14 +183,13 @@ export default function AdminPage() {
                 <span className="font-medium text-slate-700">Contamination Ratio</span>
                 <span className="font-bold text-purple-600">{contamination.toFixed(2)}</span>
               </div>
-              <input 
-                type="range" 
-                min="0.01" 
-                max="0.5" 
-                step="0.01" 
-                value={contamination}
-                onChange={(e) => setContamination(parseFloat(e.target.value))}
-                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+              <Slider 
+                min={0.01} 
+                max={0.5} 
+                step={0.01} 
+                value={[contamination]}
+                onValueChange={(vals) => setContamination(vals[0])}
+                className="w-full py-2"
               />
               <div className="flex justify-between text-xs text-slate-400">
                 <span>Less Sensitive (0.01)</span>

@@ -1,8 +1,8 @@
 import { API_BASE_URL } from '@/config';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Home, Download, FileSpreadsheet, Sparkles, BookOpen, Info, TrendingUp, HelpCircle } from 'lucide-react';
+import { Home, Download, FileSpreadsheet, Sparkles, BookOpen, Info, TrendingUp, HelpCircle, Loader2, Search, ChevronDown, Globe2 } from 'lucide-react';
 import { sdgGoalsContent } from '../data/sdgGoalsContent';
 import { sdgColors } from '../data/sdgColors';
 import { COUNTRIES, TARGETS } from '../lib/constants';
@@ -10,6 +10,7 @@ import { getTargetDetails, generateLaymanInsight, generateDynamicLaymanInsight, 
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import PolicySimulator from './PolicySimulator';
 import CountryComparison from './CountryComparison';
 import GlobeView from '../components/GlobeView';
@@ -91,6 +92,10 @@ export default function GoalPage() {
 
   // Prediction state
   const [selectedCountry, setSelectedCountry] = useState('IND');
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [goalNum]);
   
   // Filter targets to this goal
   const goalTargets = TARGETS.filter(t => {
@@ -98,6 +103,12 @@ export default function GoalPage() {
     return gp === goalNum;
   });
   const [selectedTarget, setSelectedTarget] = useState(goalTargets[0]?.code || '1.1');
+  
+  useEffect(() => {
+    if (!goalTargets.find(t => t.code === selectedTarget)) {
+      setSelectedTarget(goalTargets[0]?.code || '1.1');
+    }
+  }, [goalNum, goalTargets, selectedTarget]);
   
   const [loading, setLoading] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
@@ -242,10 +253,10 @@ export default function GoalPage() {
     <div className="min-h-screen flex flex-col bg-cream">
       
       {/* ===== TOP HEADER BAR ===== */}
-      <header className="bg-navy text-white h-12 flex items-center px-4 z-50 sticky top-0">
-        <div className="flex items-center justify-between w-full max-w-[1400px] mx-auto">
+      <header className="fixed top-0 left-0 w-full h-14 bg-navy/95 backdrop-blur-md z-50 border-b border-white/10 flex items-center px-6">
+        <div className="flex items-center justify-between w-full max-w-7xl mx-auto">
           {/* Left: Logo */}
-          <Link to="/" className="text-sm font-semibold tracking-wide hover:text-slate-300 transition-colors">
+          <Link to="/" className="text-sm font-semibold tracking-wide hover:text-slate-300 transition-colors text-white">
             SDG Trajectory
           </Link>
           
@@ -268,20 +279,23 @@ export default function GoalPage() {
           </div>
           
           {/* Right: Country selector */}
-          <select
-            className="bg-navy border border-slate-600 text-white text-xs px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-400"
-            value={selectedCountry}
-            onChange={(e) => setSelectedCountry(e.target.value)}
-          >
-            {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-          </select>
+          <div className="w-48">
+            <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+              <SelectTrigger className="w-full h-8 bg-white border-slate-200 text-xs text-navy font-medium shadow-sm hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-white/20">
+                <SelectValue placeholder="Select Country" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTRIES.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 pt-14">
         
         {/* ===== LEFT SIDEBAR — Light theme ===== */}
-        <aside className="hidden lg:flex flex-col bg-cream border-r border-slate-200 w-16 flex-shrink-0 sticky top-12 h-[calc(100vh-3rem)] z-30 overflow-visible">
+        <aside className="hidden lg:flex flex-col bg-cream border-r border-slate-200 w-16 flex-shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] z-40 pb-20">
           {/* Home icon */}
           <Link to="/" className="flex items-center justify-center h-12 hover:bg-slate-100 transition-colors" title="Home">
             <Home className="w-4 h-4 text-warm-gray" />
@@ -292,49 +306,49 @@ export default function GoalPage() {
           </div>
           
           {/* Goal numbers with hover tooltip */}
-          <nav className="flex-1 flex flex-col items-center gap-0.5 py-1 scrollbar-thin overflow-visible">
-            {Array.from({ length: 17 }, (_, i) => i + 1).map(num => {
-              const isActive = num === goalNum;
-              const isHovered = hoveredSidebarGoal === num;
-              return (
-                <div key={num} className="relative">
-                  <Link
-                    to={`/goal/${num}`}
-                    className="w-9 h-9 flex items-center justify-center text-xs font-bold rounded transition-all duration-150"
-                    style={{
-                      backgroundColor: isActive ? sdgColors[num] : (isHovered ? sdgColors[num] + '20' : 'transparent'),
-                      color: isActive ? '#fff' : (isHovered ? sdgColors[num] : '#64748b'),
-                    }}
-                    onMouseEnter={() => setHoveredSidebarGoal(num)}
-                    onMouseLeave={() => setHoveredSidebarGoal(null)}
-                  >
-                    {num}
-                  </Link>
-                  {/* Hover tooltip — shows short title */}
-                  {isHovered && (
-                    <div
-                      className="absolute left-full top-1/2 -translate-y-1/2 ml-2 whitespace-nowrap z-50 pointer-events-none"
-                      style={{ animation: 'dropdownIn 0.15s ease-out' }}
+          {/* W-96 hack allows tooltips to escape the overflow-y-auto clipping without blocking clicks */}
+          <div className="flex-1 relative w-16">
+            <nav className="absolute inset-0 w-96 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pointer-events-none flex flex-col items-start py-1">
+              {Array.from({ length: 17 }, (_, i) => i + 1).map(num => {
+                const isActive = num === goalNum;
+                const isHovered = hoveredSidebarGoal === num;
+                return (
+                  <div key={num} className="relative w-16 flex justify-center mb-0.5 pointer-events-auto">
+                    <Link
+                      to={`/goal/${num}`}
+                      className="w-9 h-9 flex items-center justify-center text-xs font-bold rounded transition-all duration-150"
+                      style={{
+                        backgroundColor: isActive ? sdgColors[num] : (isHovered ? sdgColors[num] + '20' : 'transparent'),
+                        color: isActive ? '#fff' : (isHovered ? sdgColors[num] : '#64748b'),
+                      }}
+                      onMouseEnter={() => setHoveredSidebarGoal(num)}
+                      onMouseLeave={() => setHoveredSidebarGoal(null)}
                     >
-                      <div
-                        className="flex items-center px-3 py-1.5 rounded text-xs font-semibold text-white shadow-lg"
-                        style={{ backgroundColor: sdgColors[num], borderLeft: `3px solid ${sdgColors[num]}` }}
-                      >
-                        {SDG_SHORT_TITLES[num]}
-                      </div>
+                      {num}
+                    </Link>
+                    {/* Hover tooltip — shows short title */}
+                    <div
+                      className={`absolute left-[3.75rem] top-1/2 -translate-y-1/2 whitespace-nowrap z-50 pointer-events-none transition-all duration-200 ease-out ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'}`}
+                    >
+                    <div
+                      className="flex items-center px-3 py-1.5 rounded text-xs font-semibold text-white shadow-lg"
+                      style={{ backgroundColor: sdgColors[num], borderLeft: `3px solid ${sdgColors[num]}` }}
+                    >
+                      {SDG_SHORT_TITLES[num]}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
+                    </div>
+                  </div>
+                );
+              })}
+            </nav>
+          </div>
         </aside>
 
         {/* ===== MAIN CONTENT ===== */}
         <main className="flex-1 min-w-0 overflow-y-auto">
           
-          {/* Goal Hero Section — Consistent navy bg, goal-colored number/underline only */}
-          <section className="text-white py-16 px-6 md:px-12 bg-navy">
+          {/* Goal Hero Section — Gradient background and subtle glow */}
+          <section className="text-white py-16 px-6 md:px-12 bg-gradient-to-br from-navy via-[#1e293b] to-navy">
             <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-10 lg:gap-8 items-center lg:items-start">
               {/* Left: Description (~52%) */}
               <div className="lg:w-[52%] flex-shrink-0">
@@ -342,7 +356,7 @@ export default function GoalPage() {
                 <div className="mb-2">
                   <span
                     className="text-6xl md:text-8xl font-serif font-bold"
-                    style={{ color: goalColor }}
+                    style={{ color: goalColor, textShadow: `0 0 40px ${goalColor}80` }}
                   >
                     {goalNum}
                   </span>
@@ -359,19 +373,19 @@ export default function GoalPage() {
                 <p className="text-white/70 leading-relaxed max-w-2xl mb-8 text-[15px]">{goal.whatItAchieves}</p>
                 
                 {/* History */}
-                <div className="border-t border-white/15 pt-6 mb-8">
+                <div className="border-t border-white/15 pt-8 mb-8">
                   <h3 className="text-sm uppercase tracking-wider text-white/40 mb-3">History & Background</h3>
                   <p className="text-white/60 leading-relaxed max-w-2xl text-sm">{goal.history}</p>
                 </div>
                 
                 {/* Official Targets */}
-                <div className="border-t border-white/15 pt-6">
+                <div className="border-t border-white/15 pt-8">
                   <h3 className="text-sm uppercase tracking-wider text-white/40 mb-3">SDG Targets Covered</h3>
                   <div className="flex flex-wrap gap-2">
                     {goal.officialTargets.map((target, idx) => (
                       <span 
                         key={idx}
-                        className="text-xs px-3 py-1.5 text-white/90 rounded border"
+                        className="text-xs px-3 py-1.5 text-white/90 rounded-full backdrop-blur-sm border transition-colors hover:bg-white/10 cursor-default"
                         style={{ borderColor: goalColor + '60', backgroundColor: goalColor + '20' }}
                       >
                         {target}
@@ -383,13 +397,15 @@ export default function GoalPage() {
 
               {/* Right: Rotating Globe (~48%) — bigger, with ring touching edges */}
               <div className="lg:w-[48%] flex justify-center items-center lg:sticky lg:top-20 py-4">
-                <GlobeView
-                  goalNumber={goalNum}
-                  highlightColor="#ffffff"
-                  compact={true}
-                  size={520}
-                  showRing={true}
-                />
+                <div className="relative flex justify-center items-center rounded-full shadow-[0_0_60px_-15px_rgba(59,130,246,0.3)] bg-gradient-to-b from-transparent to-blue-50/20 p-4">
+                  <GlobeView
+                    goalNumber={goalNum}
+                    highlightColor="#ffffff"
+                    compact={true}
+                    size={520}
+                    showRing={true}
+                  />
+                </div>
               </div>
             </div>
           </section>
@@ -411,27 +427,29 @@ export default function GoalPage() {
                 <div className="flex flex-col md:flex-row gap-4 items-end">
                   <div className="flex-1 space-y-2 w-full">
                     <label className="text-sm font-medium text-slate-700">Country</label>
-                    <select 
-                      className="w-full h-11 px-4 border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy rounded-md"
-                      value={selectedCountry}
-                      onChange={(e) => setSelectedCountry(e.target.value)}
-                    >
-                      {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-                    </select>
+                    <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+                      <SelectTrigger className="w-full h-11 bg-white">
+                        <SelectValue placeholder="Select Country" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COUNTRIES.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                   
                   <div className="flex-1 space-y-2 w-full">
                     <label className="text-sm font-medium text-slate-700">SDG Target</label>
-                    <select 
-                      className="w-full h-11 px-4 border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy rounded-md"
-                      value={selectedTarget}
-                      onChange={(e) => setSelectedTarget(e.target.value)}
-                    >
-                      {goalTargets.map(t => {
-                        const targetInfo = getTargetDetails(t.code, goalNum);
-                        return <option key={t.code} value={t.code}>{t.code} — {targetInfo.title}</option>;
-                      })}
-                    </select>
+                    <Select value={selectedTarget} onValueChange={setSelectedTarget}>
+                      <SelectTrigger className="w-full h-11 bg-white">
+                        <SelectValue placeholder="Select Target" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {goalTargets.map(t => {
+                          const targetInfo = getTargetDetails(t.code, goalNum);
+                          return <SelectItem key={t.code} value={t.code}>{t.code} — {targetInfo.title}</SelectItem>;
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="w-full md:w-auto flex gap-2">
@@ -450,8 +468,8 @@ export default function GoalPage() {
                     >
                       {loading ? (
                         <span className="flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Processing...
+                          <Loader2 className="animate-spin w-4 h-4" />
+                          Generating...
                         </span>
                       ) : "Generate Forecast"}
                     </Button>
@@ -513,7 +531,7 @@ export default function GoalPage() {
                   {(() => {
                     const targetInfo = getTargetDetails(selectedTarget, goalNum);
                     return (
-                      <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-lg shadow-sm">
+                      <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-lg shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
                           <div>
                             <h3 className="text-lg font-serif font-semibold text-warm-gray">
@@ -583,7 +601,7 @@ export default function GoalPage() {
                   })()}
 
                   {/* Context + Layman Insight */}
-                  <div className="space-y-6">
+                  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150 fill-mode-both">
                     <div className="bg-white border border-slate-200 p-6 rounded-lg shadow-sm">
                       <h4 className="text-sm font-semibold text-warm-gray flex items-center gap-2 mb-3">
                         <BookOpen className="w-4 h-4 text-slate-400" /> Target Overview

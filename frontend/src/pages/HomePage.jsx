@@ -2,7 +2,7 @@ import { API_BASE_URL } from '@/config';
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Search, ChevronDown, Globe2 } from 'lucide-react';
+import { Search, ChevronDown, Globe2, ShieldCheck } from 'lucide-react';
 import { sdgGoalsContent } from '../data/sdgGoalsContent';
 import { sdgColors } from '../data/sdgColors';
 import { COUNTRIES } from '../lib/constants';
@@ -88,6 +88,10 @@ export default function HomePage() {
               about the 17 Sustainable Development Goals. Explore trajectories, compare
               countries, and simulate policy outcomes toward 2030.
             </p>
+            <Link to="/admin" className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 hover:text-white transition-all shadow-[0_0_15px_-3px_rgba(225,29,72,0.4)]">
+              <ShieldCheck className="w-5 h-5" />
+              <span className="font-semibold tracking-wide text-sm">Admin Panel</span>
+            </Link>
           </div>
 
           {/* Right: SDG Goals image */}
@@ -164,11 +168,11 @@ export default function HomePage() {
 
               {/* Dropdown panel — opens downward */}
               {dropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-navy/20 rounded-lg shadow-xl z-50 overflow-hidden"
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white opacity-100 text-slate-900 border border-slate-300 rounded-lg shadow-2xl z-[100] overflow-hidden"
                   style={{ animation: 'dropdownIn 0.2s ease-out' }}
                 >
                   {/* Search input */}
-                  <div className="p-3 border-b border-slate-100">
+                  <div className="p-3 border-b border-slate-200">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input
@@ -177,9 +181,9 @@ export default function HomePage() {
                         placeholder="Search countries..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full h-10 pl-9 pr-4 border border-slate-200 rounded-md text-sm
+                        className="w-full h-10 pl-9 pr-4 border border-slate-300 rounded-md text-sm text-slate-900
                           focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/10
-                          placeholder:text-slate-400"
+                          placeholder:text-slate-400 bg-white"
                       />
                     </div>
                   </div>
@@ -187,7 +191,7 @@ export default function HomePage() {
                   {/* Country list */}
                   <ul className="max-h-52 overflow-y-auto py-1">
                     {filteredCountries.length === 0 ? (
-                      <li className="px-4 py-3 text-sm text-slate-400 text-center">
+                      <li className="px-4 py-3 text-sm text-slate-400 text-center bg-white">
                         No countries found
                       </li>
                     ) : (
@@ -196,9 +200,9 @@ export default function HomePage() {
                           <button
                             type="button"
                             onClick={() => handleCountrySelect(c.code)}
-                            className="w-full text-left px-4 py-2.5 text-sm text-warm-gray
-                              hover:bg-navy/5 hover:text-navy
-                              focus:outline-none focus:bg-navy/5
+                            className="w-full text-left px-4 py-2.5 text-sm text-slate-900 bg-white opacity-100
+                              hover:bg-slate-100 hover:text-slate-900
+                              focus:outline-none focus:bg-slate-100
                               transition-colors duration-100"
                           >
                             {c.name}

@@ -100,8 +100,8 @@ def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multipli
     df_clean = df.dropna(subset=['IndicatorValue', 'Year']).copy()
     
     # Sparse Data Bypass (CRITICAL): if length is < 2
-    if len(df_clean) < 2:
-        logger.warning(f"Insufficient real data ({len(df_clean)} points). Triggering sparse data bypass.")
+    if len(df.dropna(subset=['IndicatorValue'])) < 2:
+        logger.warning(f"Insufficient real data. Triggering sparse data bypass.")
         return {
             "predictions": [],
             "status": "Insufficient Data",

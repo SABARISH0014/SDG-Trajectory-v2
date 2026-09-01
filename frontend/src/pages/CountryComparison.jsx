@@ -1,7 +1,7 @@
 import { API_BASE_URL } from '@/config';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
-import { Scale, Play, Activity, Info, Trophy, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Scale, Play, Activity, Info, Trophy, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { COUNTRIES, TARGETS } from '../lib/constants';
@@ -17,6 +17,13 @@ import {
   ResponsiveContainer,
   Legend
 } from 'recharts';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
+
+const formatLargeNumber = (value) => {
+  if (value === null || value === undefined) return '';
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
+};
 
 export default function CountryComparison({ goalNumber }) {
   const [countryA, setCountryA] = useState('IND');
@@ -38,6 +45,12 @@ export default function CountryComparison({ goalNumber }) {
     }
     return '13.2';
   });
+
+  useEffect(() => {
+    if (!filteredTargets.find(t => t.code === selectedTarget)) {
+      setSelectedTarget(filteredTargets[0]?.code || '13.2');
+    }
+  }, [goalNumber, filteredTargets, selectedTarget]);
 
   const [loading, setLoading] = useState(false);
   const [dataA, setDataA] = useState(null);
@@ -61,20 +74,32 @@ export default function CountryComparison({ goalNumber }) {
 
   const processData = (response) => {
     const { historical_data, predictions, status } = response.data;
-    const chartData = [];
     
-    historical_data.forEach(d => {
-      chartData.push({ Year: d.Year, actualValue: d.IndicatorValue, predictedValue: null });
-    });
+    const histMapped = historical_data.map(d => ({ Year: parseInt(d.Year), actualValue: d.IndicatorValue, predictedValue: null }));
+    const predMapped = predictions.map(p => ({ Year: parseInt(p.Year), actualValue: null, predictedValue: p.PredictedValue }));
+    
+    let chartData = [...histMapped, ...predMapped];
+    chartData.sort((a, b) => a.Year - b.Year);
 
-    if (historical_data.length > 0 && predictions.length > 0) {
-      const lastActual = historical_data[historical_data.length - 1];
-      chartData[chartData.length - 1].predictedValue = lastActual.IndicatorValue;
-    }
-    
-    predictions.forEach(p => {
-      chartData.push({ Year: p.Year, actualValue: null, predictedValue: p.PredictedValue });
+    const mergedDataMap = new Map();
+    chartData.forEach(item => {
+      if (mergedDataMap.has(item.Year)) {
+        const existing = mergedDataMap.get(item.Year);
+        mergedDataMap.set(item.Year, {
+          ...existing,
+          actualValue: item.actualValue !== null ? item.actualValue : existing.actualValue,
+          predictedValue: item.predictedValue !== null ? item.predictedValue : existing.predictedValue
+        });
+      } else {
+        mergedDataMap.set(item.Year, item);
+      }
     });
+    chartData = Array.from(mergedDataMap.values()).sort((a, b) => a.Year - b.Year);
+
+    const lastHistoricalIndex = chartData.map(d => d.actualValue !== null).lastIndexOf(true);
+    if (lastHistoricalIndex !== -1) {
+      chartData[lastHistoricalIndex].predictedValue = chartData[lastHistoricalIndex].actualValue;
+    }
     
     return { chartData, status };
   };
@@ -146,9 +171,9 @@ export default function CountryComparison({ goalNumber }) {
 
     let explanation = '';
     if (isLowerBetter) {
-      explanation = `${currentLeader} is currently performing better with a lower metric level (${formatMetricValue(leaderVal)} ${targetInfo.unit}) compared to ${trailerName} (${formatMetricValue(trailerVal)} ${targetInfo.unit}). By 2030, statistical projections show ${projectedLeader} sustaining an advantageous trajectory. To narrow this gap, ${trailerName} will require targeted policy interventions and accelerated investments.`;
+      explanation = `${currentLeader} is currently performing better with a lower metric level (${formatLargeNumber(leaderVal)} ${targetInfo.unit}) compared to ${trailerName} (${formatLargeNumber(trailerVal)} ${targetInfo.unit}). By 2030, statistical projections show ${projectedLeader} sustaining an advantageous trajectory. To narrow this gap, ${trailerName} will require targeted policy interventions and accelerated investments.`;
     } else {
-      explanation = `${currentLeader} is currently leading this indicator with higher performance (${formatMetricValue(leaderVal)} ${targetInfo.unit}) vs ${trailerName} (${formatMetricValue(trailerVal)} ${targetInfo.unit}). Projections indicate that ${projectedLeader} will maintain strong momentum through 2030, while ${trailerName} must scale up execution to achieve comparable milestone levels.`;
+      explanation = `${currentLeader} is currently leading this indicator with higher performance (${formatLargeNumber(leaderVal)} ${targetInfo.unit}) vs ${trailerName} (${formatLargeNumber(trailerVal)} ${targetInfo.unit}). Projections indicate that ${projectedLeader} will maintain strong momentum through 2030, while ${trailerName} must scale up execution to achieve comparable milestone levels.`;
     }
 
     return {
@@ -197,13 +222,13 @@ export default function CountryComparison({ goalNumber }) {
                 tickLine={false} 
                 axisLine={{ stroke: '#cbd5e1' }} 
                 tick={{fill: '#64748b', fontSize: 11}} 
-                tickFormatter={(val) => formatMetricValue(val)}
+                tickFormatter={(val) => formatLargeNumber(val)}
                 width={65}
                 label={{ value: targetInfo.unit, angle: -90, position: 'insideLeft', offset: -5, fill: '#475569', fontSize: 11, fontWeight: 500 }}
               />
               <Tooltip 
                 contentStyle={{ borderRadius: '6px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} 
-                formatter={(val) => [`${formatMetricValue(val)} ${targetInfo.unit}`, '']}
+                formatter={(val) => [`${formatLargeNumber(val)} ${targetInfo.unit}`, '']}
               />
               <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
               <Line name="Historical Data" type="monotone" dataKey="actualValue" stroke={color} strokeWidth={2.5} dot={{ r: 3.5 }} />
@@ -259,46 +284,49 @@ export default function CountryComparison({ goalNumber }) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">SDG Target</label>
-            <select 
-              className="w-full h-11 px-3 border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy rounded-md"
-              value={selectedTarget}
-              onChange={(e) => setSelectedTarget(e.target.value)}
-            >
-              {filteredTargets.map(t => {
-                const info = getTargetDetails(t.code, goalNumber);
-                return <option key={t.code} value={t.code}>{t.code} — {info.title}</option>;
-              })}
-            </select>
+            <Select value={selectedTarget} onValueChange={setSelectedTarget} disabled={loading}>
+              <SelectTrigger className="w-full h-11 bg-white">
+                <SelectValue placeholder="Select Target" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredTargets.map(t => {
+                  const info = getTargetDetails(t.code, goalNumber);
+                  return <SelectItem key={t.code} value={t.code}>{t.code} — {info.title}</SelectItem>;
+                })}
+              </SelectContent>
+            </Select>
           </div>
           
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-navy block"></span> Country A
             </label>
-            <select 
-              className="w-full h-11 px-3 border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy rounded-md"
-              value={countryA}
-              onChange={(e) => setCountryA(e.target.value)}
-            >
-              {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-            </select>
+            <Select value={countryA} onValueChange={setCountryA} disabled={loading}>
+              <SelectTrigger className="w-full h-11 bg-white">
+                <SelectValue placeholder="Select Country A" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTRIES.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-purple-500 block"></span> Country B
             </label>
-            <select 
-              className="w-full h-11 px-3 border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy rounded-md"
-              value={countryB}
-              onChange={(e) => setCountryB(e.target.value)}
-            >
-              {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-            </select>
+            <Select value={countryB} onValueChange={setCountryB} disabled={loading}>
+              <SelectTrigger className="w-full h-11 bg-white">
+                <SelectValue placeholder="Select Country B" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTRIES.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
           <Button onClick={handleCompare} disabled={loading} className="w-full h-11" size="lg">
-            {loading ? "Fetching Data..." : <><Play className="w-4 h-4 mr-2" /> Compare Trajectories</>}
+            {loading ? <><Loader2 className="animate-spin w-4 h-4 mr-2" /> Fetching Data...</> : <><Play className="w-4 h-4 mr-2" /> Compare Trajectories</>}
           </Button>
         </div>
       </div>
@@ -325,40 +353,42 @@ export default function CountryComparison({ goalNumber }) {
 
       {/* Comparative Analysis Card: Who is performing better, why, and 2030 gap */}
       {comparativeInsights && (
-        <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+        <Card className="bg-white shadow-sm space-y-4">
+          <CardHeader className="flex flex-row items-center gap-2 border-b border-slate-100 pb-3 mb-4 p-6">
             <Trophy className="w-5 h-5 text-amber-500" />
-            <h4 className="font-bold text-warm-gray text-base">
+            <CardTitle className="font-bold text-warm-gray text-base">
               Comparative Analysis: {countryAName} vs {countryBName}
-            </h4>
-          </div>
-
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 py-2">
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 pt-0">
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 py-2">
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
               <span className="text-xs text-slate-500 block font-medium">{countryAName} (Latest)</span>
-              <span className="text-lg font-bold text-navy">{formatMetricValue(comparativeInsights.latestA)} {targetInfo.unit}</span>
+              <span className="text-lg font-bold text-navy">{formatLargeNumber(comparativeInsights.latestA)} {targetInfo.unit}</span>
             </div>
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
               <span className="text-xs text-slate-500 block font-medium">{countryAName} (2030 Proj.)</span>
-              <span className="text-lg font-bold text-purple-600">{formatMetricValue(comparativeInsights.pred2030A)} {targetInfo.unit}</span>
+              <span className="text-lg font-bold text-purple-600">{formatLargeNumber(comparativeInsights.pred2030A)} {targetInfo.unit}</span>
             </div>
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
               <span className="text-xs text-slate-500 block font-medium">{countryBName} (Latest)</span>
-              <span className="text-lg font-bold text-navy">{formatMetricValue(comparativeInsights.latestB)} {targetInfo.unit}</span>
+              <span className="text-lg font-bold text-navy">{formatLargeNumber(comparativeInsights.latestB)} {targetInfo.unit}</span>
             </div>
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
               <span className="text-xs text-slate-500 block font-medium">{countryBName} (2030 Proj.)</span>
-              <span className="text-lg font-bold text-purple-600">{formatMetricValue(comparativeInsights.pred2030B)} {targetInfo.unit}</span>
+              <span className="text-lg font-bold text-purple-600">{formatLargeNumber(comparativeInsights.pred2030B)} {targetInfo.unit}</span>
             </div>
-          </div>
+            </div>
+
 
           {/* Layman Comparative Finding */}
           <div className="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-lg text-sm text-slate-700 leading-relaxed">
             <strong className="text-emerald-950 font-semibold">Key Finding: </strong>
             {comparativeInsights.explanation}
           </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* 2-line Disclaimer */}

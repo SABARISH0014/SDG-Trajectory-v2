@@ -1,7 +1,7 @@
 import { API_BASE_URL } from '@/config';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
-import { SlidersHorizontal, Play, Info, Sparkles, BookOpen, HelpCircle } from 'lucide-react';
+import { SlidersHorizontal, Play, Info, Sparkles, BookOpen, HelpCircle, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { COUNTRIES, TARGETS } from '../lib/constants';
 import { getTargetDetails, generateLaymanInsight, generateDynamicLaymanInsight, formatMetricValue } from '../data/sdgTargetsData';
@@ -17,6 +17,13 @@ import {
 } from 'recharts';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Badge } from '../components/ui/Badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Slider } from '../components/ui/slider';
+
+const formatLargeNumber = (value) => {
+  if (value === null || value === undefined) return '';
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
+};
 
 export default function PolicySimulator({ goalNumber }) {
   const [selectedCountry, setSelectedCountry] = useState('IND');
@@ -37,6 +44,12 @@ export default function PolicySimulator({ goalNumber }) {
     }
     return '13.2';
   });
+
+  useEffect(() => {
+    if (!filteredTargets.find(t => t.code === selectedTarget)) {
+      setSelectedTarget(filteredTargets[0]?.code || '13.2');
+    }
+  }, [goalNumber, filteredTargets, selectedTarget]);
 
   const [policyMultiplier, setPolicyMultiplier] = useState(1.0);
   const [loading, setLoading] = useState(false);
@@ -59,26 +72,32 @@ export default function PolicySimulator({ goalNumber }) {
       });
       
       const { historical_data, predictions, status } = response.data;
-      const chartData = [];
       
-      historical_data.forEach(d => {
-        chartData.push({ Year: d.Year, actualValue: d.IndicatorValue, predictedValue: null });
-      });
+      const histMapped = historical_data.map(d => ({ Year: parseInt(d.Year), actualValue: d.IndicatorValue, predictedValue: null }));
+      const predMapped = predictions.map(p => ({ Year: parseInt(p.Year), actualValue: null, predictedValue: p.PredictedValue }));
+      
+      let chartData = [...histMapped, ...predMapped];
+      chartData.sort((a, b) => a.Year - b.Year);
 
-      if (historical_data.length > 0 && predictions.length > 0) {
-        const validHistorical = historical_data.filter(d => d.IndicatorValue !== null);
-        if (validHistorical.length > 0) {
-          const lastActual = validHistorical[validHistorical.length - 1];
-          const chartIndex = chartData.findIndex(d => d.Year === lastActual.Year);
-          if (chartIndex !== -1) {
-            chartData[chartIndex].predictedValue = lastActual.IndicatorValue;
-          }
+      const mergedDataMap = new Map();
+      chartData.forEach(item => {
+        if (mergedDataMap.has(item.Year)) {
+          const existing = mergedDataMap.get(item.Year);
+          mergedDataMap.set(item.Year, {
+            ...existing,
+            actualValue: item.actualValue !== null ? item.actualValue : existing.actualValue,
+            predictedValue: item.predictedValue !== null ? item.predictedValue : existing.predictedValue
+          });
+        } else {
+          mergedDataMap.set(item.Year, item);
         }
-      }
-      
-      predictions.forEach(p => {
-        chartData.push({ Year: p.Year, actualValue: null, predictedValue: p.PredictedValue });
       });
+      chartData = Array.from(mergedDataMap.values()).sort((a, b) => a.Year - b.Year);
+
+      const lastHistoricalIndex = chartData.map(d => d.actualValue !== null).lastIndexOf(true);
+      if (lastHistoricalIndex !== -1) {
+        chartData[lastHistoricalIndex].predictedValue = chartData[lastHistoricalIndex].actualValue;
+      }
 
       setData(chartData);
       setSimulatedStatus(status);
@@ -144,27 +163,29 @@ export default function PolicySimulator({ goalNumber }) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Country</label>
-            <select 
-              className="w-full h-11 px-3 border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy rounded-md"
-              value={selectedCountry}
-              onChange={(e) => setSelectedCountry(e.target.value)}
-            >
-              {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-            </select>
+            <Select value={selectedCountry} onValueChange={setSelectedCountry} disabled={loading}>
+              <SelectTrigger className="w-full h-11 bg-white">
+                <SelectValue placeholder="Select Country" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTRIES.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">SDG Target</label>
-            <select 
-              className="w-full h-11 px-3 border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy rounded-md"
-              value={selectedTarget}
-              onChange={(e) => setSelectedTarget(e.target.value)}
-            >
-              {filteredTargets.map(t => {
-                const info = getTargetDetails(t.code, goalNumber);
-                return <option key={t.code} value={t.code}>{t.code} — {info.title}</option>;
-              })}
-            </select>
+            <Select value={selectedTarget} onValueChange={setSelectedTarget} disabled={loading}>
+              <SelectTrigger className="w-full h-11 bg-white">
+                <SelectValue placeholder="Select Target" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredTargets.map(t => {
+                  const info = getTargetDetails(t.code, goalNumber);
+                  return <SelectItem key={t.code} value={t.code}>{t.code} — {info.title}</SelectItem>;
+                })}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -174,14 +195,14 @@ export default function PolicySimulator({ goalNumber }) {
                 {getMultiplierLabel(policyMultiplier)}
               </span>
             </div>
-            <input 
-              type="range" 
-              min="0.5" 
-              max="1.5" 
-              step="0.1" 
-              value={policyMultiplier}
-              onChange={(e) => setPolicyMultiplier(parseFloat(e.target.value))}
-              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-navy"
+            <Slider 
+              min={0.5} 
+              max={1.5} 
+              step={0.1} 
+              value={[policyMultiplier]}
+              onValueChange={(vals) => setPolicyMultiplier(vals[0])}
+              disabled={loading}
+              className="w-full py-2"
             />
             <div className="flex justify-between text-[11px] text-slate-400 font-medium">
               <span>Slowdown (0.5x)</span>
@@ -191,7 +212,7 @@ export default function PolicySimulator({ goalNumber }) {
           </div>
 
           <Button onClick={handleSimulate} disabled={loading} className="w-full h-11" size="lg">
-            {loading ? "Simulating..." : <><Play className="w-4 h-4 mr-2" /> Run Simulation</>}
+            {loading ? <><Loader2 className="animate-spin w-4 h-4 mr-2" /> Simulating...</> : <><Play className="w-4 h-4 mr-2" /> Run Simulation</>}
           </Button>
         </div>
 
@@ -249,14 +270,14 @@ export default function PolicySimulator({ goalNumber }) {
                     tickLine={false} 
                     axisLine={{ stroke: '#cbd5e1' }} 
                     tick={{fill: '#64748b', fontSize: 11}}
-                    tickFormatter={(val) => formatMetricValue(val)} 
+                    tickFormatter={(val) => formatLargeNumber(val)} 
                     width={65}
                     label={{ value: targetInfo.unit, angle: -90, position: 'insideLeft', offset: -5, fill: '#475569', fontSize: 11, fontWeight: 500 }}
                   />
                   <Tooltip 
                     contentStyle={{ borderRadius: '6px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} 
                     labelStyle={{ fontWeight: 'bold', color: '#1B2A4A' }}
-                    formatter={(val) => [`${formatMetricValue(val)} ${targetInfo.unit}`, '']}
+                    formatter={(val) => [`${formatLargeNumber(val)} ${targetInfo.unit}`, '']}
                   />
                   <Legend verticalAlign="top" height={36} iconType="circle" />
                   <Line name="Historical Baseline" type="monotone" dataKey="actualValue" stroke="#1B2A4A" strokeWidth={2.5} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} />
