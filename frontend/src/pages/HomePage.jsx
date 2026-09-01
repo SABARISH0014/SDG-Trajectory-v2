@@ -9,12 +9,14 @@ import { COUNTRIES } from '../lib/constants';
 import GlobeView from '../components/GlobeView';
 import sdgGoalsImage from '../lib/SDG Goals.avif';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import SplashScreenOverlay from '../components/SplashScreenOverlay';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const [hoveredGoal, setHoveredGoal] = useState(null);
   const [globeMarkers, setGlobeMarkers] = useState([]);
   const [selectedCountry, setSelectedCountry] = useState('');
+  const [loading, setLoading] = useState(true);
 
   // Custom country dropdown state
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -29,6 +31,8 @@ export default function HomePage() {
         setGlobeMarkers(response.data);
       } catch (error) {
         console.error("Failed to fetch globe markers:", error);
+      } finally {
+        setLoading(false);
       }
     };
     fetchMarkers();
@@ -72,6 +76,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-cream text-warm-gray font-sans">
+      {loading && <SplashScreenOverlay message="Initializing SDG Trajectory..." />}
 
       {/* ===== SECTION 1: Dark Hero Header with SDG image ===== */}
       <section className="bg-navy text-white relative">

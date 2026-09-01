@@ -15,6 +15,10 @@ import PolicySimulator from './PolicySimulator';
 import CountryComparison from './CountryComparison';
 import GlobeView from '../components/GlobeView';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import ExportDossierButton from '../components/ExportDossierButton';
+import CopilotDrawer from '../components/CopilotDrawer';
+import SplashScreenOverlay from '../components/SplashScreenOverlay';
+
 import {
   LineChart,
   Line,
@@ -302,9 +306,11 @@ export default function GoalPage() {
         {/* ===== LEFT SIDEBAR — Light theme ===== */}
         <aside className="hidden lg:flex flex-col bg-cream border-r border-slate-200 w-16 flex-shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] z-40 pb-20">
           {/* Home icon */}
-            <Link to="/" className="flex items-center text-sm font-medium text-slate-500 hover:text-navy transition-colors">
-              <Home className="w-4 h-4 text-warm-gray" />
+          <div className="flex justify-center pt-4 pb-2 border-b border-slate-200/50 mb-2">
+            <Link to="/" className="w-9 h-9 flex items-center justify-center rounded-md bg-white border border-slate-200 text-slate-500 hover:text-navy hover:bg-indigo-50 hover:border-indigo-200 hover:shadow-sm transition-all">
+              <Home className="w-4 h-4" />
             </Link>
+          </div>
           
           <div className="px-2 py-2">
             <p className="text-[8px] uppercase tracking-wider text-slate-400 text-center leading-tight"><span>Explore</span><br/><span>17 SDGs</span></p>
@@ -517,16 +523,19 @@ export default function GoalPage() {
 
               {/* Loading */}
               {loading && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-lg">
-                    <Skeleton className="h-8 w-32 mb-4" />
-                    <Skeleton className="h-[350px] w-full" />
+                <>
+                  <SplashScreenOverlay message="Predicting 2030 Trajectory..." />
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-lg">
+                      <Skeleton className="h-8 w-32 mb-4" />
+                      <Skeleton className="h-[350px] w-full" />
+                    </div>
+                    <div className="space-y-6">
+                      <div className="bg-white border border-slate-200 p-6 rounded-lg"><Skeleton className="h-32 w-full" /></div>
+                      <div className="bg-white border border-slate-200 p-6 rounded-lg"><Skeleton className="h-48 w-full" /></div>
+                    </div>
                   </div>
-                  <div className="space-y-6">
-                    <div className="bg-white border border-slate-200 p-6 rounded-lg"><Skeleton className="h-32 w-full" /></div>
-                    <div className="bg-white border border-slate-200 p-6 rounded-lg"><Skeleton className="h-48 w-full" /></div>
-                  </div>
-                </div>
+                </>
               )}
 
               {/* Results */}
@@ -536,7 +545,7 @@ export default function GoalPage() {
                   {(() => {
                     const targetInfo = getTargetDetails(selectedTarget, goalNum);
                     return (
-                      <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-lg shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <div id="trajectory-chart-container" className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-lg shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
                           <div>
                             <h3 className="text-lg font-serif font-semibold text-warm-gray">
@@ -593,13 +602,24 @@ export default function GoalPage() {
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-slate-100">
-                          <Button variant="outline" className="text-slate-600 bg-white hover:bg-slate-50 border-slate-200" onClick={handleExportCSV}>
-                            <FileSpreadsheet className="w-4 h-4 mr-2" /> <span>Export CSV</span>
+                        <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-slate-100 pdf-hide">
+                          <Button variant="outline" className="text-slate-600 bg-white hover:bg-slate-50 border-slate-200 h-9 px-4 transition-all" onClick={handleExportCSV}>
+                            <FileSpreadsheet className="w-4 h-4 mr-2" /> <span className="text-sm font-medium">Export CSV</span>
                           </Button>
-                          <Button variant="outline" className="text-slate-600 bg-white hover:bg-slate-50 border-slate-200" onClick={handleSaveChart}>
-                            <Download className="w-4 h-4 mr-2" /> <span>Save Chart</span>
+                          <Button variant="outline" className="text-slate-600 bg-white hover:bg-slate-50 border-slate-200 h-9 px-4 transition-all" onClick={handleSaveChart}>
+                            <Download className="w-4 h-4 mr-2" /> <span className="text-sm font-medium">Save Chart</span>
                           </Button>
+                          <ExportDossierButton 
+                            chartId="trajectory-chart-container" 
+                            context={{
+                              countryCode: selectedCountry,
+                              countryName: COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry,
+                              selectedTarget: selectedTarget,
+                              baselineValue: dashboardData?.chart_data?.find(d => d.Year === 2015)?.actualValue,
+                              projectedValue2030: dashboardData?.chart_data?.find(d => d.Year === 2030)?.predictedValue,
+                              status: dashboardData?.status,
+                            }} 
+                          />
                         </div>
                       </div>
                     );
@@ -662,7 +682,7 @@ export default function GoalPage() {
           </section>
 
           {/* Footer */}
-          <footer className="border-t border-slate-200 bg-cream">
+          <footer className="border-t border-slate-200 bg-cream relative z-10">
             <div className="max-w-6xl mx-auto px-6 py-8 text-center text-sm text-slate-500">
               <p>© 2026 SDG Trajectory — Academic Project Prototype</p>
               <p className="mt-1 text-xs text-slate-400">
@@ -672,6 +692,18 @@ export default function GoalPage() {
           </footer>
         </main>
       </div>
+
+      <CopilotDrawer 
+        context={{
+          countryCode: selectedCountry,
+          countryName: COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry,
+          selectedTarget: selectedTarget,
+          baselineValue: dashboardData?.chart_data?.find(d => d.Year === 2015)?.actualValue,
+          projectedValue2030: dashboardData?.chart_data?.find(d => d.Year === 2030)?.predictedValue,
+          status: dashboardData?.status,
+          historicalData: dashboardData?.chart_data
+        }} 
+      />
     </div>
   );
 }

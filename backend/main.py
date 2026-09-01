@@ -11,6 +11,7 @@ import tempfile
 import shutil
 import pandas as pd
 import threading
+import httpx
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -136,6 +137,13 @@ class PredictionResponse(BaseModel):
     status: str
     policy_simulated_projection: Optional[float] = None
     ai_narrative: str
+
+class CopilotMessage(BaseModel):
+    role: str
+    content: str
+
+class CopilotRequest(BaseModel):
+    messages: List[CopilotMessage]
 
 class CountryProfileGoalResponse(BaseModel):
     goal: str
@@ -296,6 +304,46 @@ def get_globe_markers(request: Request):
     except FileNotFoundError:
         return []
 
+@app.post("/api/copilot/chat")
+@limiter.limit("20/minute")
+async def copilot_chat(request: Request, body: CopilotRequest):
+    """
+    Proxy endpoint for SDG Policy Copilot to securely contact OpenRouter without exposing the API key on the client.
+    """
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        logger.error("OPENROUTER_API_KEY is not set in backend environment variables.")
+        raise HTTPException(status_code=500, detail="API key is missing on the server.")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "http://localhost:5173", # Keep same for rate limiting safety
+                    "X-Title": "SDG Trajectory Forecaster"
+                },
+                json={
+                    "model": "google/gemma-4-26b-a4b-it:free",
+                    "models": [
+                        "google/gemma-4-26b-a4b-it:free",
+                        "poolside/laguna-s-2.1:free",
+                        "inclusionai/ling-3.0-flash-fin:free"
+                    ],
+                    "messages": [msg.dict() for msg in body.messages]
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]
+    except httpx.HTTPStatusError as e:
+        logger.error(f"OpenRouter HTTP Error: {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"AI Service Error: {e.response.text}")
+    except Exception as e:
+        logger.error(f"OpenRouter Request failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

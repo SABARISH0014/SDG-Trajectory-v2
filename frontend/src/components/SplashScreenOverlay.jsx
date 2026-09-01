@@ -1,0 +1,70 @@
+import React from 'react';
+import { createPortal } from 'react-dom';
+
+export default function SplashScreenOverlay({ message = "Initializing Global Data..." }) {
+  const overlay = (
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-50/80 backdrop-blur-sm">
+      <style>
+        {`
+        .sdg-spinner-wrapper {
+          position: relative;
+          width: 72px;
+          height: 72px;
+          margin-bottom: 24px;
+        }
+        .sdg-spinner {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          background: conic-gradient(
+            #E5243B 0% 5.88%, #DDA63A 5.88% 11.76%, #4C9F38 11.76% 17.64%, 
+            #C5192D 17.64% 23.52%, #FF3A21 23.52% 29.40%, #26BDE2 29.40% 35.28%, 
+            #FCC30B 35.28% 41.16%, #A21942 41.16% 47.04%, #FD6925 47.04% 52.92%, 
+            #DD1367 52.92% 58.80%, #FD9D24 58.80% 64.68%, #BF8B2E 64.68% 70.56%, 
+            #3F7E44 70.56% 76.44%, #0A97D9 76.44% 82.32%, #56C02B 82.32% 88.20%, 
+            #00689D 88.20% 94.08%, #19486A 94.08% 100%
+          );
+          animation: sdg-spin 2s linear infinite;
+        }
+        .sdg-spinner-inner {
+          position: absolute;
+          top: 8px; left: 8px; right: 8px; bottom: 8px;
+          background-color: #f8fafc; /* Matches slate-50 */
+          border-radius: 50%;
+          box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+        @keyframes sdg-spin {
+          100% { transform: rotate(360deg); }
+        }
+        .splash-text {
+          font-size: 18px;
+          font-weight: 700;
+          color: #1e293b;
+          letter-spacing: 0.5px;
+          animation: pulse-text 2s ease-in-out infinite;
+        }
+        .splash-subtext {
+          margin-top: 6px;
+          font-size: 13px;
+          font-weight: 500;
+          color: #64748b;
+        }
+        @keyframes pulse-text {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.6; }
+        }
+        `}
+      </style>
+      
+      <div className="sdg-spinner-wrapper">
+        <div className="sdg-spinner"></div>
+        <div className="sdg-spinner-inner"></div>
+      </div>
+      <div className="splash-text">SDG Trajectory</div>
+      <div className="splash-subtext">{message}</div>
+    </div>
+  );
+
+  // Use createPortal to break out of any CSS transforms/filters in the parent
+  return createPortal(overlay, document.body);
+}
