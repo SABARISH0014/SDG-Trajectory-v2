@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/config';
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Sparkles, Loader2, Bot, User } from 'lucide-react';
@@ -29,23 +30,10 @@ export default function CopilotDrawer({ context }) {
   const handleSendMessage = async (text) => {
     if (!text.trim()) return;
 
-    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-    
     const newUserMsg = { role: 'user', content: text };
     setMessages(prev => [...prev, newUserMsg]);
     setInputValue('');
     setIsLoading(true);
-
-    if (!apiKey || apiKey === 'your_openrouter_api_key_here' || apiKey.trim() === '') {
-      setTimeout(() => {
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: '⚠️ **API Key Missing**<br/><br/>Please set `VITE_OPENROUTER_API_KEY` in your frontend `.env` file to unlock the SDG Copilot AI.' 
-        }]);
-        setIsLoading(false);
-      }, 1000);
-      return;
-    }
 
     try {
       // Create a context snapshot limited to the latest 5 records to save tokens
@@ -68,31 +56,23 @@ Recent Data Trends: ${JSON.stringify(recentData)}`;
         newUserMsg
       ];
 
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const response = await fetch(`${API_BASE_URL}/api/copilot/chat`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": window.location.origin,
-          "X-Title": "SDG Trajectory Forecaster",
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "google/gemma-4-26b-a4b-it:free",
-          models: [
-            "google/gemma-4-26b-a4b-it:free",
-            "poolside/laguna-s-2.1:free",
-            "inclusionai/ling-3.0-flash-fin:free"
-          ],
-          messages: apiMessages,
+          messages: apiMessages
         })
       });
 
       if (!response.ok) {
-        throw new Error(`API Request Failed: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `API Request Failed: ${response.status}`);
       }
 
       const data = await response.json();
-      const reply = data.choices[0].message.content;
+      const reply = data.content;
 
       // Simple markdown-to-html conversion for bold and newlines
       const formattedReply = reply
@@ -105,7 +85,7 @@ Recent Data Trends: ${JSON.stringify(recentData)}`;
       console.error(error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: '🚨 Error connecting to the AI service. Please check your API key, ensure OpenRouter credits are available, and verify your network connection.' 
+        content: `🚨 Error connecting to the AI service. (${error.message})` 
       }]);
     } finally {
       setIsLoading(false);

@@ -17,6 +17,7 @@ import GlobeView from '../components/GlobeView';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import ExportDossierButton from '../components/ExportDossierButton';
 import CopilotDrawer from '../components/CopilotDrawer';
+import SplashScreenOverlay from '../components/SplashScreenOverlay';
 
 import {
   LineChart,
@@ -522,16 +523,19 @@ export default function GoalPage() {
 
               {/* Loading */}
               {loading && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-lg">
-                    <Skeleton className="h-8 w-32 mb-4" />
-                    <Skeleton className="h-[350px] w-full" />
+                <>
+                  <SplashScreenOverlay message="Predicting 2030 Trajectory..." />
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-lg">
+                      <Skeleton className="h-8 w-32 mb-4" />
+                      <Skeleton className="h-[350px] w-full" />
+                    </div>
+                    <div className="space-y-6">
+                      <div className="bg-white border border-slate-200 p-6 rounded-lg"><Skeleton className="h-32 w-full" /></div>
+                      <div className="bg-white border border-slate-200 p-6 rounded-lg"><Skeleton className="h-48 w-full" /></div>
+                    </div>
                   </div>
-                  <div className="space-y-6">
-                    <div className="bg-white border border-slate-200 p-6 rounded-lg"><Skeleton className="h-32 w-full" /></div>
-                    <div className="bg-white border border-slate-200 p-6 rounded-lg"><Skeleton className="h-48 w-full" /></div>
-                  </div>
-                </div>
+                </>
               )}
 
               {/* Results */}

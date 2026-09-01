@@ -9,6 +9,7 @@ import { sdgGoalsContent } from '../data/sdgGoalsContent';
 import { COUNTRIES } from '../lib/constants';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import CopilotDrawer from '../components/CopilotDrawer';
+import SplashScreenOverlay from '../components/SplashScreenOverlay';
 import { formatMetricValue, getTargetDetails } from '../data/sdgTargetsData';
 
 const SDG_NAMES = {
@@ -242,10 +243,7 @@ export default function CountryDataPage() {
 
         {/* Loading Indicator */}
         {loading && (
-          <div className="flex flex-col items-center justify-center h-64 space-y-4">
-            <Loader2 className="w-12 h-12 text-navy animate-spin" />
-            <p className="text-slate-500 font-medium">Analyzing trajectory data for {countryName}...</p>
-          </div>
+          <SplashScreenOverlay message={`Analyzing trajectory data for ${countryName}...`} />
         )}
 
         {/* Error Alert */}

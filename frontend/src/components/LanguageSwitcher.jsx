@@ -1,34 +1,30 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Globe2, ChevronDown } from 'lucide-react';
+import SplashScreenOverlay from './SplashScreenOverlay';
 
 export default function LanguageSwitcher() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   
   // Initialize from localStorage to persist across route changes
   const [currentLang, setCurrentLang] = useState(() => {
     return localStorage.getItem('preferredLanguage') || 'en';
   });
   
-  // Anti-flash mechanism: Hide the page very briefly during client-side navigation
+  // Anti-flash mechanism: Show splash screen briefly during client-side navigation
   // to give Google Translate's MutationObserver time to translate the new DOM nodes.
   useLayoutEffect(() => {
     const savedLang = localStorage.getItem('preferredLanguage');
     if (savedLang && savedLang !== 'en') {
-      document.body.style.opacity = '0'; // Hide synchronously before paint
+      setIsTranslating(true);
       
       const timer = setTimeout(() => {
-        document.body.style.transition = 'opacity 0.2s ease-in';
-        document.body.style.opacity = '1'; // Fade in after Google has translated
-        
-        setTimeout(() => {
-          document.body.style.transition = '';
-        }, 200);
-      }, 150); 
+        setIsTranslating(false);
+      }, 350); 
       
       return () => {
         clearTimeout(timer);
-        document.body.style.opacity = '1';
-        document.body.style.transition = '';
+        setIsTranslating(false);
       };
     }
   }, []);
@@ -88,11 +84,9 @@ export default function LanguageSwitcher() {
     localStorage.setItem('preferredLanguage', langCode);
     setIsOpen(false);
 
-    // Elegant Transition: Fade out the page first to mask the network latency and text snapping
-    document.body.style.transition = 'opacity 0.15s ease-out';
-    document.body.style.opacity = '0';
+    // Show splash screen to mask network latency and text snapping
+    setIsTranslating(true);
 
-    // Wait for the fade-out to complete before triggering the heavy translation engine
     setTimeout(() => {
       const select = document.querySelector('.goog-te-combo');
       if (select) {
@@ -106,17 +100,11 @@ export default function LanguageSwitcher() {
         console.warn('Google Translate select not found.');
       }
       
-      // Give Google Translate API time to fetch and swap text (350ms), then fade back in
+      // Give Google Translate API time to fetch and swap text (400ms), then hide splash
       setTimeout(() => {
-         document.body.style.transition = 'opacity 0.3s ease-in';
-         document.body.style.opacity = '1';
-         
-         // Cleanup inline styles
-         setTimeout(() => {
-           document.body.style.transition = '';
-         }, 300);
-      }, 350);
-    }, 150);
+         setIsTranslating(false);
+      }, 400);
+    }, 50);
   };
 
   const selectedLabel = languages.find(l => l.code === currentLang)?.label || 'English';
@@ -152,6 +140,10 @@ export default function LanguageSwitcher() {
             ))}
           </ul>
         </div>
+      )}
+      
+      {isTranslating && (
+        <SplashScreenOverlay message="Translating Page..." />
       )}
     </div>
   );

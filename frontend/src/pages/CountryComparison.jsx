@@ -5,6 +5,7 @@ import { Scale, Play, Activity, Info, Trophy, TrendingUp, AlertTriangle, Loader2
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { TARGETS, COUNTRIES } from '../lib/constants';
+import SplashScreenOverlay from '../components/SplashScreenOverlay';
 import { Skeleton } from '../components/ui/Skeleton';
 import { getTargetDetails, formatMetricValue } from '../data/sdgTargetsData';
 import {
@@ -335,6 +336,7 @@ export default function CountryComparison({ goalNumber }) {
       <div className="flex flex-col md:flex-row gap-6 min-h-[420px]">
         {loading ? (
           <>
+            <SplashScreenOverlay message="Benchmarking Countries..." />
             <Skeleton className="flex-1 h-[420px] rounded-lg" />
             <Skeleton className="flex-1 h-[420px] rounded-lg" />
           </>

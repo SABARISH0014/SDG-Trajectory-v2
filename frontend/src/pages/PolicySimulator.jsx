@@ -4,6 +4,7 @@ import axios from 'axios';
 import { SlidersHorizontal, Play, Info, Sparkles, BookOpen, HelpCircle, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import ExportDossierButton from '../components/ExportDossierButton';
+import SplashScreenOverlay from '../components/SplashScreenOverlay';
 import { TARGETS, COUNTRIES } from '../lib/constants';
 import { getTargetDetails, generateLaymanInsight, generateDynamicLaymanInsight, formatMetricValue } from '../data/sdgTargetsData';
 import {
@@ -231,9 +232,12 @@ export default function PolicySimulator({ goalNumber }) {
 
       {/* Chart & Insights */}
       {loading ? (
-        <div className="border border-slate-200 bg-white p-6 rounded-lg shadow-sm">
-          <Skeleton className="w-full h-[350px]" />
-        </div>
+        <>
+          <SplashScreenOverlay message="Simulating Policy Trajectory..." />
+          <div className="border border-slate-200 bg-white p-6 rounded-lg shadow-sm">
+            <Skeleton className="w-full h-[350px]" />
+          </div>
+        </>
       ) : data && data.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
