@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Scale, Play, Activity, Info, Trophy, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { COUNTRIES, TARGETS } from '../lib/constants';
+import { TARGETS, COUNTRIES } from '../lib/constants';
 import { Skeleton } from '../components/ui/Skeleton';
 import { getTargetDetails, formatMetricValue } from '../data/sdgTargetsData';
 import {
@@ -291,7 +291,7 @@ export default function CountryComparison({ goalNumber }) {
               <SelectContent>
                 {filteredTargets.map(t => {
                   const info = getTargetDetails(t.code, goalNumber);
-                  return <SelectItem key={t.code} value={t.code}>{t.code} — {info.title}</SelectItem>;
+                  return <SelectItem key={t.code} value={t.code}><span className="notranslate">{t.code}</span> <span>— {info.title}</span></SelectItem>;
                 })}
               </SelectContent>
             </Select>
@@ -299,7 +299,7 @@ export default function CountryComparison({ goalNumber }) {
           
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-navy block"></span> Country A
+              <span className="w-3 h-3 rounded-full bg-navy block"></span> <span>Country A</span>
             </label>
             <Select value={countryA} onValueChange={setCountryA} disabled={loading}>
               <SelectTrigger className="w-full h-11 bg-white">
@@ -313,7 +313,7 @@ export default function CountryComparison({ goalNumber }) {
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-purple-500 block"></span> Country B
+              <span className="w-3 h-3 rounded-full bg-purple-500 block"></span> <span>Country B</span>
             </label>
             <Select value={countryB} onValueChange={setCountryB} disabled={loading}>
               <SelectTrigger className="w-full h-11 bg-white">
@@ -326,7 +326,7 @@ export default function CountryComparison({ goalNumber }) {
           </div>
 
           <Button onClick={handleCompare} disabled={loading} className="w-full h-11" size="lg">
-            {loading ? <><Loader2 className="animate-spin w-4 h-4 mr-2" /> Fetching Data...</> : <><Play className="w-4 h-4 mr-2" /> Compare Trajectories</>}
+            {loading ? <><Loader2 className="animate-spin w-4 h-4 mr-2" /> <span>Fetching Data...</span></> : <><Play className="w-4 h-4 mr-2" /> <span>Compare Trajectories</span></>}
           </Button>
         </div>
       </div>
