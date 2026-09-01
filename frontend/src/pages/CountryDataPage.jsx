@@ -8,6 +8,7 @@ import { sdgColors } from '../data/sdgColors';
 import { sdgGoalsContent } from '../data/sdgGoalsContent';
 import { COUNTRIES } from '../lib/constants';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import CopilotDrawer from '../components/CopilotDrawer';
 import { formatMetricValue, getTargetDetails } from '../data/sdgTargetsData';
 
 const SDG_NAMES = {
@@ -348,12 +349,22 @@ export default function CountryDataPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 bg-cream mt-12">
+      <footer className="border-t border-slate-200 bg-cream mt-12 relative z-10">
         <div className="max-w-7xl mx-auto px-4 py-8 text-center text-sm text-slate-500">
           <p>© 2026 SDG Trajectory — Academic Project Prototype</p>
           <p className="text-xs text-slate-400 mt-1">Data synthesized from United Nations SDG Indicators and World Bank Open Data.</p>
         </div>
       </footer>
+
+      <CopilotDrawer 
+        context={{
+          countryCode: countryCode,
+          countryName: countryName,
+          selectedTarget: 'All Goals (Macro National Profile)',
+          status: 'Mixed',
+          historicalData: data?.goals?.map(g => ({ Goal: g.goal, Status: g.status, ProjectedValue: g.projected_value })) || []
+        }} 
+      />
     </div>
   );
 }

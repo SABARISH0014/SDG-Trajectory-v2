@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
 import { SlidersHorizontal, Play, Info, Sparkles, BookOpen, HelpCircle, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import ExportDossierButton from '../components/ExportDossierButton';
 import { TARGETS, COUNTRIES } from '../lib/constants';
 import { getTargetDetails, generateLaymanInsight, generateDynamicLaymanInsight, formatMetricValue } from '../data/sdgTargetsData';
 import {
@@ -237,7 +238,7 @@ export default function PolicySimulator({ goalNumber }) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Chart Container */}
-          <div className="lg:col-span-2 border border-slate-200 bg-white p-6 rounded-lg shadow-sm">
+          <div id="policy-simulator-chart-container" className="lg:col-span-2 border border-slate-200 bg-white p-6 rounded-lg shadow-sm">
             <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
               <div>
                 <h4 className="text-lg font-serif font-semibold text-warm-gray">
@@ -293,6 +294,20 @@ export default function PolicySimulator({ goalNumber }) {
                 <strong className="text-slate-800">Simulation Method: </strong>
                 This simulation dynamically scales the statistical linear regression slope by {policyMultiplier.toFixed(1)}x starting from the latest recorded data point. It provides an illustrative model of potential 2030 development trajectories under varying policy conditions.
               </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end pdf-hide">
+              <ExportDossierButton 
+                chartId="policy-simulator-chart-container" 
+                context={{
+                  countryCode: selectedCountry,
+                  countryName: COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry,
+                  selectedTarget: selectedTarget,
+                  baselineValue: data?.find(d => d.Year === 2015)?.actualValue,
+                  projectedValue2030: data?.find(d => d.Year === 2030)?.predictedValue,
+                  status: simulatedStatus || 'Unknown',
+                }} 
+              />
             </div>
           </div>
 
