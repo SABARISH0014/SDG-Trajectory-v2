@@ -5,7 +5,7 @@ import axios from 'axios';
 import { Home, Download, FileSpreadsheet, Sparkles, BookOpen, Info, TrendingUp, HelpCircle, Loader2, Search, ChevronDown, Globe2 } from 'lucide-react';
 import { sdgGoalsContent } from '../data/sdgGoalsContent';
 import { sdgColors } from '../data/sdgColors';
-import { COUNTRIES, TARGETS } from '../lib/constants';
+import { TARGETS, COUNTRIES } from '../lib/constants';
 import { getTargetDetails, generateLaymanInsight, generateDynamicLaymanInsight, formatMetricValue } from '../data/sdgTargetsData';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import PolicySimulator from './PolicySimulator';
 import CountryComparison from './CountryComparison';
 import GlobeView from '../components/GlobeView';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 import {
   LineChart,
   Line,
@@ -83,6 +84,7 @@ const formatLargeNumber = (value) => {
 };
 
 export default function GoalPage() {
+  
   const { goalNumber } = useParams();
   const navigate = useNavigate();
   const goalNum = parseInt(goalNumber, 10);
@@ -278,16 +280,19 @@ export default function GoalPage() {
             ))}
           </div>
           
-          {/* Right: Country selector */}
-          <div className="w-48">
-            <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-              <SelectTrigger className="w-full h-8 bg-white border-slate-200 text-xs text-navy font-medium shadow-sm hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-white/20">
-                <SelectValue placeholder="Select Country" />
-              </SelectTrigger>
-              <SelectContent>
-                {COUNTRIES.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          {/* Right: Language and Country selector */}
+          <div className="flex items-center gap-4">
+            <LanguageSwitcher />
+            <div className="w-48">
+              <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+                <SelectTrigger className="w-full h-8 bg-white border-slate-200 text-xs text-navy font-medium shadow-sm hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-white/20">
+                  <SelectValue placeholder="Select Country" />
+                </SelectTrigger>
+                <SelectContent>
+                  {COUNTRIES.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </header>
@@ -297,12 +302,12 @@ export default function GoalPage() {
         {/* ===== LEFT SIDEBAR — Light theme ===== */}
         <aside className="hidden lg:flex flex-col bg-cream border-r border-slate-200 w-16 flex-shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] z-40 pb-20">
           {/* Home icon */}
-          <Link to="/" className="flex items-center justify-center h-12 hover:bg-slate-100 transition-colors" title="Home">
-            <Home className="w-4 h-4 text-warm-gray" />
-          </Link>
+            <Link to="/" className="flex items-center text-sm font-medium text-slate-500 hover:text-navy transition-colors">
+              <Home className="w-4 h-4 text-warm-gray" />
+            </Link>
           
           <div className="px-2 py-2">
-            <p className="text-[8px] uppercase tracking-wider text-slate-400 text-center leading-tight">Explore<br/>17 SDGs</p>
+            <p className="text-[8px] uppercase tracking-wider text-slate-400 text-center leading-tight"><span>Explore</span><br/><span>17 SDGs</span></p>
           </div>
           
           {/* Goal numbers with hover tooltip */}
@@ -446,7 +451,7 @@ export default function GoalPage() {
                       <SelectContent>
                         {goalTargets.map(t => {
                           const targetInfo = getTargetDetails(t.code, goalNum);
-                          return <SelectItem key={t.code} value={t.code}>{t.code} — {targetInfo.title}</SelectItem>;
+                          return <SelectItem key={t.code} value={t.code}><span className="notranslate">{t.code}</span> <span>— {targetInfo.title}</span></SelectItem>;
                         })}
                       </SelectContent>
                     </Select>
@@ -489,7 +494,7 @@ export default function GoalPage() {
                             Goal {goalNum}: {goal.title}
                           </span>
                           <span className="text-base font-bold text-warm-gray">
-                            Target {selectedTarget}: {targetInfo.title}
+                            Target <span className="notranslate">{selectedTarget}</span>: {targetInfo.title}
                           </span>
                         </div>
                       </div>
@@ -590,10 +595,10 @@ export default function GoalPage() {
 
                         <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-slate-100">
                           <Button variant="outline" className="text-slate-600 bg-white hover:bg-slate-50 border-slate-200" onClick={handleExportCSV}>
-                            <FileSpreadsheet className="w-4 h-4 mr-2" /> Export CSV
+                            <FileSpreadsheet className="w-4 h-4 mr-2" /> <span>Export CSV</span>
                           </Button>
                           <Button variant="outline" className="text-slate-600 bg-white hover:bg-slate-50 border-slate-200" onClick={handleSaveChart}>
-                            <Download className="w-4 h-4 mr-2" /> Save Chart
+                            <Download className="w-4 h-4 mr-2" /> <span>Save Chart</span>
                           </Button>
                         </div>
                       </div>
@@ -604,7 +609,7 @@ export default function GoalPage() {
                   <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150 fill-mode-both">
                     <div className="bg-white border border-slate-200 p-6 rounded-lg shadow-sm">
                       <h4 className="text-sm font-semibold text-warm-gray flex items-center gap-2 mb-3">
-                        <BookOpen className="w-4 h-4 text-slate-400" /> Target Overview
+                        <BookOpen className="w-4 h-4 text-slate-400" /> <span>Target Overview</span>
                       </h4>
                       <p className="text-sm text-slate-600 leading-relaxed">
                         <strong className="font-semibold text-slate-800">SDG Context: </strong>
@@ -615,7 +620,7 @@ export default function GoalPage() {
                     <div className="bg-white border border-slate-200 p-6 rounded-lg shadow-sm relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-1.5 h-full" style={{ backgroundColor: goalColor }} />
                       <h4 className="text-sm font-semibold text-warm-gray flex items-center gap-2 mb-3 pl-2">
-                        <Sparkles className="w-4 h-4 text-purple-600" /> AI Trajectory Insight
+                        <Sparkles className="w-4 h-4 text-purple-600" /> <span>AI Trajectory Insight</span>
                       </h4>
                       <p className="text-sm text-slate-700 leading-relaxed font-medium pl-2">
                         {generateDynamicLaymanInsight({

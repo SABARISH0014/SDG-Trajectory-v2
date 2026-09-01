@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
 import { SlidersHorizontal, Play, Info, Sparkles, BookOpen, HelpCircle, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { COUNTRIES, TARGETS } from '../lib/constants';
+import { TARGETS, COUNTRIES } from '../lib/constants';
 import { getTargetDetails, generateLaymanInsight, generateDynamicLaymanInsight, formatMetricValue } from '../data/sdgTargetsData';
 import {
   LineChart,
@@ -182,7 +182,7 @@ export default function PolicySimulator({ goalNumber }) {
               <SelectContent>
                 {filteredTargets.map(t => {
                   const info = getTargetDetails(t.code, goalNumber);
-                  return <SelectItem key={t.code} value={t.code}>{t.code} — {info.title}</SelectItem>;
+                  return <SelectItem key={t.code} value={t.code}><span className="notranslate">{t.code}</span> <span>— {info.title}</span></SelectItem>;
                 })}
               </SelectContent>
             </Select>
@@ -212,7 +212,7 @@ export default function PolicySimulator({ goalNumber }) {
           </div>
 
           <Button onClick={handleSimulate} disabled={loading} className="w-full h-11" size="lg">
-            {loading ? <><Loader2 className="animate-spin w-4 h-4 mr-2" /> Simulating...</> : <><Play className="w-4 h-4 mr-2" /> Run Simulation</>}
+            {loading ? <><Loader2 className="animate-spin w-4 h-4 mr-2" /> <span>Simulating...</span></> : <><Play className="w-4 h-4 mr-2" /> <span>Run Simulation</span></>}
           </Button>
         </div>
 
@@ -301,7 +301,7 @@ export default function PolicySimulator({ goalNumber }) {
             <div className="border border-slate-200 bg-white p-6 rounded-lg shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500" />
               <h4 className="text-sm font-semibold text-warm-gray flex items-center gap-2 mb-3 pl-2">
-                <Sparkles className="w-4 h-4 text-emerald-600" /> 2030 Policy Impact Insight
+                <Sparkles className="w-4 h-4 text-emerald-600" /> <span>2030 Policy Impact Insight</span>
               </h4>
               <p className="text-sm text-slate-700 leading-relaxed font-medium pl-2 mb-3">
                 {generateDynamicLaymanInsight({
@@ -329,7 +329,7 @@ export default function PolicySimulator({ goalNumber }) {
 
             <div className="border border-slate-200 bg-white p-6 rounded-lg shadow-sm">
               <h4 className="text-sm font-semibold text-warm-gray flex items-center gap-2 mb-3">
-                <BookOpen className="w-4 h-4 text-slate-400" /> Indicator Breakdown
+                <BookOpen className="w-4 h-4 text-slate-400" /> <span>Indicator Breakdown</span>
               </h4>
               <ul className="text-xs text-slate-600 space-y-2">
                 <li>• <strong>Target:</strong> {targetInfo.code} — {targetInfo.title}</li>

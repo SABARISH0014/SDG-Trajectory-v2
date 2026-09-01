@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/Badge';
 import { sdgColors } from '../data/sdgColors';
 import { sdgGoalsContent } from '../data/sdgGoalsContent';
 import { COUNTRIES } from '../lib/constants';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 import { formatMetricValue, getTargetDetails } from '../data/sdgTargetsData';
 
 const SDG_NAMES = {
@@ -126,7 +127,7 @@ export default function CountryDataPage() {
           
           {/* Left: Home navigation link */}
           <Link to="/" className="flex items-center text-sm font-semibold text-white hover:text-teal-300 transition-colors flex-shrink-0">
-            <ArrowLeft className="w-4 h-4 mr-2" /> SDG Trajectory Home
+            <ArrowLeft className="w-4 h-4 mr-2" /> <span>Home</span>
           </Link>
           
           {/* Center: 17 SDG Dots navigation bar */}
@@ -148,7 +149,9 @@ export default function CountryDataPage() {
           </div>
 
           {/* Right: Country Switcher Dropdown in navbar */}
-          <div className="relative flex-shrink-0" ref={dropdownRef}>
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <LanguageSwitcher />
+            <div className="relative" ref={dropdownRef}>
             <button
               type="button"
               onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -167,7 +170,7 @@ export default function CountryDataPage() {
                     <input
                       ref={searchInputRef}
                       type="text"
-                      placeholder="Search country..."
+                      placeholder="Search countries..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-full h-8 pl-8 pr-3 text-xs border border-slate-300 rounded focus:outline-none focus:border-navy bg-white text-slate-900"
@@ -194,6 +197,7 @@ export default function CountryDataPage() {
                 </ul>
               </div>
             )}
+            </div>
           </div>
         </div>
       </header>

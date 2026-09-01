@@ -35,6 +35,11 @@
     @apply bg-background text-foreground;
     font-family: "Inter", system-ui, -apple-system, sans-serif;
     line-height: 1.6;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+  h1, h2, h3, h4, h5, h6, p, span, a, div, li, td, th {
+    word-break: break-word;
   }
   h1, h2, h3, h4 {
     font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
@@ -54,7 +59,16 @@
   }
 }
 
-/* Styled scrollbar for dropdown lists */
+/* Hide scrollbar completely but allow scrolling */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Styled scrollbar for other dropdown lists */
 .overflow-y-auto::-webkit-scrollbar {
   width: 6px;
 }
@@ -67,4 +81,39 @@
 }
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+/* Headless Google Translate - Hide Google UI Elements completely */
+.goog-te-banner-frame,
+iframe.goog-te-banner-frame,
+.skiptranslate > iframe.goog-te-banner-frame,
+iframe.skiptranslate,
+#goog-gt-tt,
+.goog-tooltip,
+.VIpgJd-ZVi9od-aZ2wEe-wOHMyf,
+.VIpgJd-ZVi9od-aZ2wEe-wOHMyf-ti6hGc {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  border: none !important;
+  z-index: -1000 !important;
+}
+
+#google_translate_element,
+.visually-hidden {
+  position: absolute !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  height: 1px !important;
+  width: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+body {
+  top: 0px !important;
+  position: static !important;
 }

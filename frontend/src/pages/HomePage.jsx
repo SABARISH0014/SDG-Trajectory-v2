@@ -8,6 +8,7 @@ import { sdgColors } from '../data/sdgColors';
 import { COUNTRIES } from '../lib/constants';
 import GlobeView from '../components/GlobeView';
 import sdgGoalsImage from '../lib/SDG Goals.avif';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -52,6 +53,8 @@ export default function HomePage() {
     }
   }, [dropdownOpen]);
 
+  // COUNTRIES is imported from constants
+
   const filteredCountries = COUNTRIES.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -72,6 +75,9 @@ export default function HomePage() {
 
       {/* ===== SECTION 1: Dark Hero Header with SDG image ===== */}
       <section className="bg-navy text-white relative">
+        <div className="absolute top-6 right-6 z-50">
+          <LanguageSwitcher />
+        </div>
         <div className="max-w-7xl mx-auto px-6 md:px-12 py-20 md:py-28 flex flex-col lg:flex-row items-center justify-between gap-12">
           {/* Left: Text */}
           <div className="lg:w-[50%] flex-shrink-0">
@@ -90,7 +96,7 @@ export default function HomePage() {
             </p>
             <Link to="/admin" className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 hover:text-white transition-all shadow-[0_0_15px_-3px_rgba(225,29,72,0.4)]">
               <ShieldCheck className="w-5 h-5" />
-              <span className="font-semibold tracking-wide text-sm">Admin Panel</span>
+              <span className="font-semibold tracking-wide text-sm">Admin Portal</span>
             </Link>
           </div>
 
@@ -146,7 +152,7 @@ export default function HomePage() {
             <div className="w-full max-w-xl relative" ref={dropdownRef}>
               <label className="block text-sm font-medium text-slate-600 mb-2">
                 <Globe2 className="inline w-4 h-4 mr-1 -mt-0.5" />
-                Which country interests you most?
+                <span>Which country interests you most?</span>
               </label>
 
               {/* Dropdown trigger */}
