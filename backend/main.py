@@ -86,44 +86,35 @@ def admin_login(request: Request, req: LoginRequest):
         return {"token": token}
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-sync_in_progress = False
-
-async def run_sync_task():
-    global sync_in_progress
-    import sys
-    import asyncio
-    try:
-        logger.info("Executing background sync pipeline...")
-        process = await asyncio.create_subprocess_exec(
-            sys.executable, "incremental_sync.py",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        try:
-            # 10 minute timeout to prevent permanent hangs
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=600.0)
-            if process.returncode == 0:
-                logger.info(f"Background sync completed successfully:\n{stdout.decode('utf-8', errors='ignore')}")
-            else:
-                logger.error(f"Background sync failed:\n{stderr.decode('utf-8', errors='ignore')}")
-        except asyncio.TimeoutError:
-            process.kill()
-            logger.error("Background sync task timed out after 10 minutes and was forcefully killed.")
-    except Exception as e:
-        logger.error(f"Background sync execution error: {e}")
-    finally:
-        sync_in_progress = False
-
 @app.post("/api/admin/sync")
 async def trigger_sync(token: str = Depends(verify_token)):
-    global sync_in_progress
-    if sync_in_progress:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Data sync is already in progress.")
+    if not settings.GITHUB_PAT:
+        logger.error("GITHUB_PAT is not set. Cannot trigger GitHub Actions.")
+        raise HTTPException(status_code=500, detail="GITHUB_PAT is not configured on the server.")
+        
+    url = "https://api.github.com/repos/SABARISH0014/SDG-Trajectory-v2/actions/workflows/backend-ci.yml/dispatches"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {settings.GITHUB_PAT}",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+    data = {
+        "ref": "main"
+    }
     
-    sync_in_progress = True
-    import asyncio
-    asyncio.create_task(run_sync_task())
-    return {"message": "Data sync started in background"}
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=data, timeout=10.0)
+            if response.status_code == 204:
+                return {"message": "GitHub Action triggered successfully."}
+            else:
+                logger.error(f"GitHub Action trigger failed: {response.status_code} - {response.text}")
+                raise HTTPException(status_code=500, detail="Failed to trigger GitHub Action.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error triggering GitHub Action: {e}")
+        raise HTTPException(status_code=500, detail="Error communicating with GitHub API.")
 
 @app.get("/api/admin/config")
 async def get_config(token: str = Depends(verify_token)):

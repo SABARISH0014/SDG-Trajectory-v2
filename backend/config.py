@@ -1,11 +1,12 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import List, Optional
 
 class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "super-secret-default-key-for-dev"
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD_HASH: str = "$2b$12$fNnTwqfq8OPbiWQK80zW0u1ubmVSnwFvpO59tEOazMlTYMMqHWI9K"
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+    GITHUB_PAT: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
