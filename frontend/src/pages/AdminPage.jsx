@@ -48,7 +48,12 @@ export default function AdminPage() {
       setTimeout(() => setSyncStatus(''), 3000);
     } catch (err) {
       console.error(err);
-      setSyncStatus('error');
+      if (err.response && err.response.status === 409) {
+        setSyncStatus('locked');
+        setTimeout(() => setSyncStatus(''), 5000);
+      } else {
+        setSyncStatus('error');
+      }
     }
   };
 
@@ -172,6 +177,7 @@ export default function AdminPage() {
                 syncStatus === 'success' ? <><CheckCircle2 className="w-4 h-4 mr-2 text-green-300" /> <span>Sync Triggered Successfully</span></> :
                   <span>Trigger Database Sync</span>}
             </Button>
+            {syncStatus === 'locked' && <p className="text-sm text-amber-500 text-center font-medium animate-in fade-in">A sync is already in progress. Please wait.</p>}
             {syncStatus === 'error' && <p className="text-sm text-red-500 text-center font-medium animate-in fade-in">Failed to trigger sync.</p>}
           </div>
 
