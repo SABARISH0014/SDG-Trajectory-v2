@@ -31,7 +31,13 @@ export default function AdminPage() {
           setContamination(res.data.contamination);
         }
       })
-      .catch(err => console.error("Failed to fetch admin config:", err));
+      .catch(err => {
+        console.error("Failed to fetch admin config:", err);
+        if (err.response && err.response.status === 401) {
+          alert("Your admin session has expired. Please log in again.");
+          handleLogout();
+        }
+      });
     }
   }, [token]);
 
@@ -65,6 +71,9 @@ export default function AdminPage() {
       if (err.response && err.response.status === 409) {
         setSyncStatus('locked');
         setTimeout(() => setSyncStatus(''), 5000);
+      } else if (err.response && err.response.status === 401) {
+        alert("Your admin session has expired. Please log in again.");
+        handleLogout();
       } else {
         setSyncStatus('error');
       }
@@ -81,7 +90,12 @@ export default function AdminPage() {
       setTimeout(() => setConfigStatus(''), 3000);
     } catch (err) {
       console.error(err);
-      setConfigStatus('error');
+      if (err.response && err.response.status === 401) {
+        alert("Your admin session has expired. Please log in again.");
+        handleLogout();
+      } else {
+        setConfigStatus('error');
+      }
     }
   };
 
@@ -180,15 +194,15 @@ export default function AdminPage() {
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">Trigger a background sync to fetch the latest UN, WHO, and World Bank datasets. This pipeline performs a surgical update rather than a full rebuild.</p>
             </div>
             <div className="p-4 bg-blue-50/50 text-blue-800 text-sm border border-blue-100 rounded-md">
-              <strong>System Notice:</strong> This sync incrementally updates Turso database records using ON CONFLICT DO UPDATE. It runs asynchronously without blocking active API requests.
+              <strong>System Notice:</strong> This triggers the <code>backend-ci.yml</code> <strong>GitHub Action</strong> to scrape global APIs. By offloading this pipeline to GitHub's servers, the Render web server remains highly performant and won't lock up or timeout!
             </div>
             <Button
               onClick={handleSync}
               disabled={syncStatus === 'syncing'}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm h-11 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
-              {syncStatus === 'syncing' ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> <span>Sync triggered (running in background)...</span></> :
-                syncStatus === 'success' ? <><CheckCircle2 className="w-4 h-4 mr-2 text-green-300" /> <span>Sync Triggered Successfully</span></> :
+              {syncStatus === 'syncing' ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> <span>Dispatching GitHub Action...</span></> :
+                syncStatus === 'success' ? <><CheckCircle2 className="w-4 h-4 mr-2 text-green-300" /> <span>GitHub Action Triggered Successfully</span></> :
                   <span>Trigger Database Sync</span>}
             </Button>
             {syncStatus === 'locked' && <p className="text-sm text-amber-500 text-center font-medium animate-in fade-in">A sync is already in progress. Please wait.</p>}
