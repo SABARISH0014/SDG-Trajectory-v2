@@ -86,26 +86,43 @@ def admin_login(request: Request, req: LoginRequest):
         return {"token": token}
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-sync_lock = threading.Lock()
+sync_in_progress = False
 
-def run_sync_task():
-    import subprocess
+async def run_sync_task():
+    global sync_in_progress
     import sys
+    import asyncio
     try:
         logger.info("Executing background sync pipeline...")
-        subprocess.run([sys.executable, "incremental_sync.py"], check=True)
-        logger.info("Background sync pipeline completed successfully.")
+        process = await asyncio.create_subprocess_exec(
+            sys.executable, "incremental_sync.py",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        try:
+            # 10 minute timeout to prevent permanent hangs
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=600.0)
+            if process.returncode == 0:
+                logger.info(f"Background sync completed successfully:\n{stdout.decode('utf-8', errors='ignore')}")
+            else:
+                logger.error(f"Background sync failed:\n{stderr.decode('utf-8', errors='ignore')}")
+        except asyncio.TimeoutError:
+            process.kill()
+            logger.error("Background sync task timed out after 10 minutes and was forcefully killed.")
     except Exception as e:
-        logger.error(f"Background sync task failed: {e}")
+        logger.error(f"Background sync execution error: {e}")
     finally:
-        sync_lock.release()
+        sync_in_progress = False
 
 @app.post("/api/admin/sync")
-def trigger_sync(background_tasks: BackgroundTasks, token: str = Depends(verify_token)):
-    if not sync_lock.acquire(blocking=False):
+async def trigger_sync(token: str = Depends(verify_token)):
+    global sync_in_progress
+    if sync_in_progress:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Data sync is already in progress.")
     
-    background_tasks.add_task(run_sync_task)
+    sync_in_progress = True
+    import asyncio
+    asyncio.create_task(run_sync_task())
     return {"message": "Data sync started in background"}
 
 @app.get("/api/admin/config")
