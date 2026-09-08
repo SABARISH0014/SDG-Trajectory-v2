@@ -2,7 +2,7 @@ import { API_BASE_URL } from '@/config';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { ShieldCheck, Database, Sliders, LogIn, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, Database, Sliders, LogIn, CheckCircle2, ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Input } from '../components/ui/input';
@@ -79,8 +79,8 @@ export default function AdminPage() {
           </Link>
           <LanguageSwitcher />
         </header>
-        <div className="flex-1 flex items-center justify-center p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <Card className="w-full max-w-md bg-white">
+        <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-cream to-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <Card className="w-full max-w-md bg-white shadow-xl border-slate-200">
             <CardHeader className="text-center space-y-2 mb-2">
               <div className="mx-auto bg-rose-100 w-12 h-12 rounded-full flex items-center justify-center mb-1">
                 <ShieldCheck className="w-6 h-6 text-rose-600" />
@@ -115,8 +115,8 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                <Button type="submit" disabled={loading} className="w-full h-10 bg-rose-600 hover:bg-rose-700 text-white">
-                  {loading ? <span>Authenticating...</span> : <><LogIn className="w-4 h-4 mr-2" /> <span>Sign In</span></>}
+                <Button type="submit" disabled={loading} className="w-full h-11 bg-rose-600 hover:bg-rose-700 text-white font-medium transition-all duration-300 hover:shadow-md">
+                  {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> <span>Authenticating...</span></> : <><LogIn className="w-4 h-4 mr-2" /> <span>Secure Sign In</span></>}
                 </Button>
               </form>
             </CardContent>
@@ -153,7 +153,7 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
           {/* Data Sync Hub */}
-          <div className="border border-slate-200 bg-white p-8 space-y-6 rounded-lg shadow-sm">
+          <div className="border border-slate-200 bg-white p-8 space-y-6 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300">
             <div>
               <h3 className="text-xl font-serif font-semibold flex items-center gap-2 text-warm-gray">
                 <Database className="w-5 h-5 text-blue-500" /> <span>Incremental Data Sync</span>
@@ -166,17 +166,17 @@ export default function AdminPage() {
             <Button
               onClick={handleSync}
               disabled={syncStatus === 'syncing'}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-sm h-11 transition-all"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm h-11 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
-              {syncStatus === 'syncing' ? <span>Sync triggered (running in background)...</span> :
-                syncStatus === 'success' ? <><CheckCircle2 className="w-4 h-4 mr-2" /> <span>Sync Triggered Successfully</span></> :
+              {syncStatus === 'syncing' ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> <span>Sync triggered (running in background)...</span></> :
+                syncStatus === 'success' ? <><CheckCircle2 className="w-4 h-4 mr-2 text-green-300" /> <span>Sync Triggered Successfully</span></> :
                   <span>Trigger Database Sync</span>}
             </Button>
             {syncStatus === 'error' && <p className="text-sm text-red-500 text-center font-medium animate-in fade-in">Failed to trigger sync.</p>}
           </div>
 
           {/* Algorithm Configurator */}
-          <div className="border border-slate-200 bg-white p-8 space-y-8 rounded-lg shadow-sm">
+          <div className="border border-slate-200 bg-white p-8 space-y-8 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300">
             <div>
               <h3 className="text-xl font-serif font-semibold flex items-center gap-2 text-warm-gray">
                 <Sliders className="w-5 h-5 text-purple-500" /> <span>Algorithm Configurator</span>
@@ -202,18 +202,18 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="p-4 bg-purple-50/50 text-purple-800 text-sm border border-purple-100 rounded-md flex items-start gap-2.5">
+            <div className="p-4 bg-purple-50 text-purple-800 text-sm border border-purple-100 rounded-md flex items-start gap-2.5 shadow-inner">
               <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 text-purple-600" />
-              <span className="leading-relaxed">Changes are saved atomically to <span className="notranslate font-mono">admin_config.json</span> and apply instantly to all new AI forecast requests.</span>
+              <span className="leading-relaxed">Changes are saved securely to the <strong>global Turso database</strong> and apply instantly across all scaled instances for AI forecast requests.</span>
             </div>
 
             <Button
               onClick={handleConfigUpdate}
               disabled={configStatus === 'saving'}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white shadow-sm h-11 transition-all"
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium shadow-sm h-11 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
-              {configStatus === 'saving' ? <span>Saving Configuration...</span> :
-                configStatus === 'success' ? <><CheckCircle2 className="w-4 h-4 mr-2" /> <span>Configuration Saved</span></> :
+              {configStatus === 'saving' ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> <span>Saving Configuration...</span></> :
+                configStatus === 'success' ? <><CheckCircle2 className="w-4 h-4 mr-2 text-green-300" /> <span>Configuration Saved</span></> :
                   <span>Apply Configuration</span>}
             </Button>
             {configStatus === 'error' && <p className="text-sm text-red-500 text-center font-medium animate-in fade-in">Failed to save configuration.</p>}

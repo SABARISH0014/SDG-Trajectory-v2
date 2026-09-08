@@ -164,3 +164,52 @@ def clear_db_cache():
     """Clear the dictionary TTL cache when database updates occur."""
     global _ASYNC_CACHE
     _ASYNC_CACHE = {}
+
+async def init_system_config():
+    url, token = get_turso_credentials()
+    if not url or not token:
+        return
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            await client.execute('''
+                CREATE TABLE IF NOT EXISTS system_config (
+                    config_key TEXT PRIMARY KEY,
+                    config_value REAL
+                )
+            ''')
+            # Initialize with default if empty
+            rs = await client.execute("SELECT COUNT(*) FROM system_config WHERE config_key = 'contamination'")
+            if rs.rows[0][0] == 0:
+                await client.execute("INSERT INTO system_config (config_key, config_value) VALUES ('contamination', 0.1)")
+    except Exception as e:
+        logger.error(f"Failed to initialize system_config table: {e}")
+
+async def get_system_config(key: str, default_value: float) -> float:
+    await init_system_config()
+    url, token = get_turso_credentials()
+    if not url or not token:
+        return default_value
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            rs = await client.execute("SELECT config_value FROM system_config WHERE config_key = ?", [key])
+            if rs.rows:
+                return float(rs.rows[0][0])
+            return default_value
+    except Exception as e:
+        logger.error(f"Failed to get system config: {e}")
+        return default_value
+
+async def set_system_config(key: str, value: float):
+    await init_system_config()
+    url, token = get_turso_credentials()
+    if not url or not token:
+        return
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            await client.execute('''
+                INSERT INTO system_config (config_key, config_value)
+                VALUES (?, ?)
+                ON CONFLICT(config_key) DO UPDATE SET config_value = excluded.config_value
+            ''', [key, float(value)])
+    except Exception as e:
+        logger.error(f"Failed to set system config: {e}")

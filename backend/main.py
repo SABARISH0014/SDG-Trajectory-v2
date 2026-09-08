@@ -18,7 +18,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from config import settings
-from database import query_database, get_country_profile_data
+from database import query_database, get_country_profile_data, set_system_config
 from forecasting import train_and_predict, calculate_core_trajectory
 from auth import create_access_token, verify_token, verify_password
 
@@ -69,23 +69,7 @@ app.add_middleware(
 )
 
 # Admin Config
-CONFIG_FILE = "admin_config.json"
-
-def get_admin_config():
-    if not os.path.exists(CONFIG_FILE):
-        return {"contamination": 0.1}
-    with open(CONFIG_FILE, "r") as f:
-        return json.load(f)
-
-def set_admin_config(key, value):
-    config = get_admin_config()
-    config[key] = value
-    
-    # Atomic write to prevent corruption during concurrent sync
-    fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(CONFIG_FILE)))
-    with os.fdopen(fd, 'w') as f:
-        json.dump(config, f)
-    os.replace(temp_path, CONFIG_FILE)
+# Replaced with Turso system_config table
 
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1)
@@ -106,9 +90,10 @@ sync_lock = threading.Lock()
 
 def run_sync_task():
     import subprocess
+    import sys
     try:
         logger.info("Executing background sync pipeline...")
-        subprocess.run(["python", "incremental_sync.py"], check=True)
+        subprocess.run([sys.executable, "incremental_sync.py"], check=True)
         logger.info("Background sync pipeline completed successfully.")
     except Exception as e:
         logger.error(f"Background sync task failed: {e}")
@@ -124,8 +109,8 @@ def trigger_sync(background_tasks: BackgroundTasks, token: str = Depends(verify_
     return {"message": "Data sync started in background"}
 
 @app.post("/api/admin/config")
-def update_config(req: ConfigRequest, token: str = Depends(verify_token)):
-    set_admin_config("contamination", req.contamination)
+async def update_config(req: ConfigRequest, token: str = Depends(verify_token)):
+    await set_system_config("contamination", req.contamination)
     return {"message": "Configuration updated successfully"}
 
 # Pydantic Schemas

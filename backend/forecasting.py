@@ -3,14 +3,13 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.linear_model import LinearRegression
 import logging
-import os
-import json
+from database import get_system_config
 
 from models import generate_narrative
 
 logger = logging.getLogger(__name__)
 
-def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
+def filter_outliers(df: pd.DataFrame, contamination_val: float = 0.1) -> pd.DataFrame:
     """
     Uses IsolationForest to detect and remove anomalous data points.
     Safety feature: Ensures the most recent chronological data point is never removed
@@ -29,13 +28,6 @@ def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
         # Sort chronologically
         real_df = real_df.sort_values(by='Year')
         
-        # Read dynamic contamination config
-        contamination_val = 0.1
-        if os.path.exists("admin_config.json"):
-            with open("admin_config.json", "r") as f:
-                config = json.load(f)
-                contamination_val = config.get("contamination", 0.1)
-                
         # Reshape for sklearn
         X = real_df[['IndicatorValue']].values
         iso_forest = IsolationForest(contamination=contamination_val, random_state=42)
@@ -84,7 +76,7 @@ def classify_status(baseline_value: float, projected_value: float, sdg_target: s
         else:
             return "Off-track"
 
-def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multiplier: float = 1.0) -> dict:
+def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multiplier: float = 1.0, contamination_val: float = 0.1) -> dict:
     """
     Core mathematical logic for SDG trajectory regression.
     """
@@ -115,7 +107,7 @@ def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multipli
         df_clean['is_regional_estimate'] = False
         
     # Safe Anomaly Detection
-    clean_df = filter_outliers(df_clean)
+    clean_df = filter_outliers(df_clean, contamination_val)
     
     # Extract ONLY real data for training
     real_df = clean_df[~clean_df['is_imputed'].astype(bool)]
@@ -216,7 +208,8 @@ async def train_and_predict(df: pd.DataFrame, sdg_target: str, policy_multiplier
     Trains a LinearRegression model to predict values for future years.
     Applies sparse data bypass if data is insufficient.
     """
-    stats = calculate_core_trajectory(df, sdg_target, policy_multiplier)
+    contamination_val = await get_system_config("contamination", 0.1)
+    stats = calculate_core_trajectory(df, sdg_target, policy_multiplier, contamination_val)
     
     if stats.get("status") == "Insufficient Data":
         return {
