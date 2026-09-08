@@ -18,7 +18,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from config import settings
-from database import query_database, get_country_profile_data, set_system_config
+from database import query_database, get_country_profile_data, set_system_config, get_system_config
 from forecasting import train_and_predict, calculate_core_trajectory
 from auth import create_access_token, verify_token, verify_password
 
@@ -107,6 +107,11 @@ def trigger_sync(background_tasks: BackgroundTasks, token: str = Depends(verify_
     
     background_tasks.add_task(run_sync_task)
     return {"message": "Data sync started in background"}
+
+@app.get("/api/admin/config")
+async def get_config(token: str = Depends(verify_token)):
+    contamination = await get_system_config("contamination", 0.1)
+    return {"contamination": float(contamination) if contamination is not None else 0.1}
 
 @app.post("/api/admin/config")
 async def update_config(req: ConfigRequest, token: str = Depends(verify_token)):
