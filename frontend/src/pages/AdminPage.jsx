@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '@/config';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { ShieldCheck, Database, Sliders, LogIn, CheckCircle2, ArrowLeft, Loader2 } from 'lucide-react';
@@ -20,6 +20,20 @@ export default function AdminPage() {
   const [contamination, setContamination] = useState(0.1);
   const [syncStatus, setSyncStatus] = useState('');
   const [configStatus, setConfigStatus] = useState('');
+
+  useEffect(() => {
+    if (token) {
+      axios.get(`${API_BASE_URL}/api/admin/config`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      .then(res => {
+        if (res.data && res.data.contamination !== undefined) {
+          setContamination(res.data.contamination);
+        }
+      })
+      .catch(err => console.error("Failed to fetch admin config:", err));
+    }
+  }, [token]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
