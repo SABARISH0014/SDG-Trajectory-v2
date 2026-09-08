@@ -31,7 +31,13 @@ export default function AdminPage() {
           setContamination(res.data.contamination);
         }
       })
-      .catch(err => console.error("Failed to fetch admin config:", err));
+      .catch(err => {
+        console.error("Failed to fetch admin config:", err);
+        if (err.response && err.response.status === 401) {
+          alert("Your admin session has expired. Please log in again.");
+          handleLogout();
+        }
+      });
     }
   }, [token]);
 
@@ -65,6 +71,9 @@ export default function AdminPage() {
       if (err.response && err.response.status === 409) {
         setSyncStatus('locked');
         setTimeout(() => setSyncStatus(''), 5000);
+      } else if (err.response && err.response.status === 401) {
+        alert("Your admin session has expired. Please log in again.");
+        handleLogout();
       } else {
         setSyncStatus('error');
       }
@@ -81,7 +90,12 @@ export default function AdminPage() {
       setTimeout(() => setConfigStatus(''), 3000);
     } catch (err) {
       console.error(err);
-      setConfigStatus('error');
+      if (err.response && err.response.status === 401) {
+        alert("Your admin session has expired. Please log in again.");
+        handleLogout();
+      } else {
+        setConfigStatus('error');
+      }
     }
   };
 
