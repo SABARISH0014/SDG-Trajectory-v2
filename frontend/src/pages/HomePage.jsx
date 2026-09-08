@@ -9,7 +9,7 @@ import { COUNTRIES } from '../lib/constants';
 import GlobeView from '../components/GlobeView';
 import sdgGoalsImage from '../lib/SDG Goals.avif';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import SplashScreenOverlay from '../components/SplashScreenOverlay';
+
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -76,7 +76,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-cream text-warm-gray font-sans">
-      {loading && <SplashScreenOverlay message="Initializing SDG Trajectory..." />}
+
 
       {/* ===== SECTION 1: Dark Hero Header with SDG image ===== */}
       <section className="bg-navy text-white relative">
@@ -87,7 +87,7 @@ export default function HomePage() {
           {/* Left: Text */}
           <div className="lg:w-[50%] flex-shrink-0">
             <p className="text-sm uppercase tracking-[0.2em] text-slate-400 mb-4 font-semibold">presents</p>
-            <h1 className="text-5xl md:text-7xl font-serif font-bold leading-[1.15] mb-6">
+            <h1 className="notranslate text-5xl md:text-7xl font-serif font-bold leading-[1.15] mb-6">
               SDG Trajectory
               <br />
               <span className="font-light text-slate-300 text-4xl md:text-5xl">of Sustainable Development Goals</span>

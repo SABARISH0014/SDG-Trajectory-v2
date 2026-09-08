@@ -107,7 +107,7 @@ Recent Data Trends: ${JSON.stringify(recentData)}`;
               className="rounded-full shadow-lg h-14 px-6 bg-indigo-600 hover:bg-indigo-700 text-white border-2 border-indigo-400/30 flex items-center gap-2"
             >
               <Sparkles className="w-5 h-5 text-amber-300" />
-              <span className="font-semibold tracking-wide">Ask SDG Copilot</span>
+              <span className="notranslate font-semibold tracking-wide">Ask SDG Copilot</span>
             </Button>
           </motion.div>
         )}
@@ -129,7 +129,7 @@ Recent Data Trends: ${JSON.stringify(recentData)}`;
                   <Bot className="w-5 h-5 text-indigo-200" />
                 </div>
                 <div>
-                  <h3 className="font-serif font-bold leading-tight">SDG Policy Copilot</h3>
+                  <h3 className="notranslate font-serif font-bold leading-tight">SDG Policy Copilot</h3>
                   <p className="text-xs text-indigo-200 opacity-80">Powered by AI</p>
                 </div>
               </div>

@@ -1,33 +1,15 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { Globe2, ChevronDown } from 'lucide-react';
-import SplashScreenOverlay from './SplashScreenOverlay';
+import { Globe2, ChevronDown, Search } from 'lucide-react';
 
 export default function LanguageSwitcher() {
   const [isOpen, setIsOpen] = useState(false);
-  const [isTranslating, setIsTranslating] = useState(false);
-  
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef(null);
   // Initialize from localStorage to persist across route changes
   const [currentLang, setCurrentLang] = useState(() => {
     return localStorage.getItem('preferredLanguage') || 'en';
   });
-  
-  // Anti-flash mechanism: Show splash screen briefly during client-side navigation
-  // to give Google Translate's MutationObserver time to translate the new DOM nodes.
-  useLayoutEffect(() => {
-    const savedLang = localStorage.getItem('preferredLanguage');
-    if (savedLang && savedLang !== 'en') {
-      setIsTranslating(true);
-      
-      const timer = setTimeout(() => {
-        setIsTranslating(false);
-      }, 350); 
-      
-      return () => {
-        clearTimeout(timer);
-        setIsTranslating(false);
-      };
-    }
-  }, []);
+
 
   const [languages, setLanguages] = useState([
     { code: 'en', label: 'English' } // default fallback
@@ -73,11 +55,18 @@ export default function LanguageSwitcher() {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
+        setSearchQuery('');
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isOpen]);
 
   const handleLanguageChange = (langCode) => {
     setCurrentLang(langCode);
@@ -85,7 +74,6 @@ export default function LanguageSwitcher() {
     setIsOpen(false);
 
     // Show splash screen to mask network latency and text snapping
-    setIsTranslating(true);
 
     setTimeout(() => {
       const select = document.querySelector('.goog-te-combo');
@@ -101,13 +89,14 @@ export default function LanguageSwitcher() {
       }
       
       // Give Google Translate API time to fetch and swap text (400ms), then hide splash
-      setTimeout(() => {
-         setIsTranslating(false);
-      }, 400);
     }, 50);
   };
 
   const selectedLabel = languages.find(l => l.code === currentLang)?.label || 'English';
+
+  const filteredLanguages = languages.filter(lang => 
+    lang.label.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="relative notranslate" ref={dropdownRef}>
@@ -125,8 +114,24 @@ export default function LanguageSwitcher() {
       {isOpen && (
         <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-md shadow-lg z-50 overflow-hidden"
              style={{ animation: 'dropdownIn 0.2s ease-out' }}>
-          <ul className="py-1 max-h-64 overflow-y-auto scrollbar-hide">
-            {languages.map((lang) => (
+          <div className="p-2 border-b border-slate-200 bg-slate-50">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-2 py-1.5 text-xs text-slate-900 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-navy focus:ring-1 focus:ring-navy placeholder:text-slate-400"
+              />
+            </div>
+          </div>
+          <ul className="py-1 max-h-56 overflow-y-auto scrollbar-hide">
+            {filteredLanguages.length === 0 ? (
+              <li className="px-4 py-3 text-xs text-slate-400 text-center">No languages found</li>
+            ) : (
+              filteredLanguages.map((lang) => (
               <li key={lang.code}>
                 <button
                   onClick={() => handleLanguageChange(lang.code)}
@@ -137,13 +142,9 @@ export default function LanguageSwitcher() {
                   {lang.label}
                 </button>
               </li>
-            ))}
+            )))}
           </ul>
         </div>
-      )}
-      
-      {isTranslating && (
-        <SplashScreenOverlay message="Translating Page..." />
       )}
     </div>
   );
