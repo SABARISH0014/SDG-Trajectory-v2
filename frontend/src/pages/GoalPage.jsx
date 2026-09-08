@@ -11,6 +11,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import TargetSelectItem from '../components/TargetSelectItem';
 import PolicySimulator from './PolicySimulator';
 import CountryComparison from './CountryComparison';
 import GlobeView from '../components/GlobeView';
@@ -29,6 +30,34 @@ import {
   ResponsiveContainer,
   Legend
 } from 'recharts';
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-950 text-white border border-slate-700 shadow-2xl p-3 rounded-lg z-[100] text-xs pointer-events-none notranslate">
+        <p className="font-semibold text-slate-400 border-b border-slate-800 pb-1 mb-1.5">
+          Year (X): <span className="text-white font-bold">{label}</span>
+        </p>
+        {payload.map((entry, index) => {
+          if (entry.value === null || entry.value === undefined) return null;
+          const isPredicted = entry.dataKey === 'predictedValue';
+          return (
+            <div key={index} className="flex items-center justify-between gap-4 py-0.5">
+              <span className="flex items-center gap-1.5" style={{ color: entry.color }}>
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                {isPredicted ? 'Forecast (Y):' : 'Historical (Y):'}
+              </span>
+              <span className="font-mono font-bold text-white">
+                {new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 }).format(entry.value)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+};
 
 // Mock Data Fallback
 const MOCK_DATA = {
@@ -159,6 +188,12 @@ export default function GoalPage() {
       // The "Bridge": stitch the solid line and dashed line together
       const lastHistoricalIndex = chartData.map(d => d.actualValue !== null).lastIndexOf(true);
       if (lastHistoricalIndex !== -1) {
+        const finalHistoricalYear = chartData[lastHistoricalIndex].Year;
+        chartData.forEach(d => {
+          if (d.Year < finalHistoricalYear) {
+            d.predictedValue = null;
+          }
+        });
         // Copy the last historical actual value into its predictedValue slot to anchor the forecast line
         chartData[lastHistoricalIndex].predictedValue = chartData[lastHistoricalIndex].actualValue;
       }
@@ -182,9 +217,9 @@ export default function GoalPage() {
   const getBadgeVariant = (status) => {
     if (!status) return "default";
     const s = status.toLowerCase();
-    if (s.includes('track')) return "success";
-    if (s.includes('risk')) return "warning";
     if (s.includes('off')) return "destructive";
+    if (s.includes('risk')) return "warning";
+    if (s.includes('track')) return "success";
     return "default";
   };
 
@@ -457,7 +492,7 @@ export default function GoalPage() {
                       <SelectContent>
                         {goalTargets.map(t => {
                           const targetInfo = getTargetDetails(t.code, goalNum);
-                          return <SelectItem key={t.code} value={t.code}><span className="notranslate">{t.code}</span> <span>— {targetInfo.title}</span></SelectItem>;
+                          return <TargetSelectItem key={t.code} targetCode={t.code} targetTitle={targetInfo.title} />;
                         })}
                       </SelectContent>
                     </Select>
@@ -492,7 +527,7 @@ export default function GoalPage() {
               {(() => {
                 const targetInfo = getTargetDetails(selectedTarget, goalNum);
                 return (
-                  <div className="bg-white border border-slate-200 p-5 mb-8 rounded-lg shadow-sm">
+                  <div key={selectedTarget} className="bg-white border border-slate-200 p-5 mb-8 rounded-lg shadow-sm">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3 mb-3">
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -576,16 +611,14 @@ export default function GoalPage() {
                                 tickLine={false} 
                                 axisLine={{ stroke: '#cbd5e1' }} 
                                 tick={{fill: '#64748b', fontSize: 11}}
-                                tickFormatter={(val) => formatLargeNumber(val)} 
+                                tickFormatter={(val) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(val)} 
+                                domain={[
+                                  dataMin => (dataMin >= 0 ? Math.max(0, dataMin - (dataMin * 0.05)) : dataMin - (Math.abs(dataMin) * 0.05)),
+                                  dataMax => dataMax + (Math.abs(dataMax) * 0.05)
+                                ]}
                                 width={75}
-                                label={{ value: targetInfo.unit, angle: -90, position: 'insideLeft', offset: -5, fill: '#475569', fontSize: 11, fontWeight: 500 }}
                               />
-                              <Tooltip 
-                                contentStyle={{ borderRadius: '6px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} 
-                                labelStyle={{ fontWeight: 'bold', color: '#1B2A4A' }}
-                                formatter={(val, name) => [`${formatLargeNumber(val)} ${targetInfo.unit}`, name === 'actualValue' ? 'Historical Data' : 'Forecast']}
-                                labelFormatter={(label) => `Year: ${label}`}
-                              />
+                              <Tooltip content={<CustomTooltip />} />
                               <Legend verticalAlign="top" height={36} iconType="circle" />
                               <Line name="Historical Data" type="monotone" dataKey="actualValue" stroke={goalColor} strokeWidth={2.5} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: goalColor, strokeWidth: 2 }} />
                               <Line name="Statistical Trend Forecast (2030)" type="monotone" dataKey="predictedValue" stroke="#8b5cf6" strokeWidth={2.5} strokeDasharray="5 5" dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: '#7c3aed', strokeWidth: 2 }} />

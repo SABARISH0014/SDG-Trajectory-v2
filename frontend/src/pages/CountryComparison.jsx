@@ -19,6 +19,7 @@ import {
   Legend
 } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import TargetSelectItem from '../components/TargetSelectItem';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 
 const formatLargeNumber = (value) => {
@@ -67,9 +68,9 @@ export default function CountryComparison({ goalNumber }) {
   const getBadgeVariant = (status) => {
     if (!status) return "default";
     const s = status.toLowerCase();
-    if (s.includes('track')) return "success";
-    if (s.includes('risk')) return "warning";
     if (s.includes('off')) return "destructive";
+    if (s.includes('risk')) return "warning";
+    if (s.includes('track')) return "success";
     return "default";
   };
 
@@ -99,6 +100,12 @@ export default function CountryComparison({ goalNumber }) {
 
     const lastHistoricalIndex = chartData.map(d => d.actualValue !== null).lastIndexOf(true);
     if (lastHistoricalIndex !== -1) {
+      const finalHistoricalYear = chartData[lastHistoricalIndex].Year;
+      chartData.forEach(d => {
+        if (d.Year < finalHistoricalYear) {
+          d.predictedValue = null;
+        }
+      });
       chartData[lastHistoricalIndex].predictedValue = chartData[lastHistoricalIndex].actualValue;
     }
     
@@ -223,9 +230,12 @@ export default function CountryComparison({ goalNumber }) {
                 tickLine={false} 
                 axisLine={{ stroke: '#cbd5e1' }} 
                 tick={{fill: '#64748b', fontSize: 11}} 
-                tickFormatter={(val) => formatLargeNumber(val)}
-                width={65}
-                label={{ value: targetInfo.unit, angle: -90, position: 'insideLeft', offset: -5, fill: '#475569', fontSize: 11, fontWeight: 500 }}
+                tickFormatter={(val) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(val)} 
+                domain={[
+                  dataMin => (dataMin >= 0 ? Math.max(0, dataMin - (dataMin * 0.05)) : dataMin - (Math.abs(dataMin) * 0.05)),
+                  dataMax => dataMax + (Math.abs(dataMax) * 0.05)
+                ]}
+                width={75}
               />
               <Tooltip 
                 contentStyle={{ borderRadius: '6px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} 
@@ -292,7 +302,7 @@ export default function CountryComparison({ goalNumber }) {
               <SelectContent>
                 {filteredTargets.map(t => {
                   const info = getTargetDetails(t.code, goalNumber);
-                  return <SelectItem key={t.code} value={t.code}><span className="notranslate">{t.code}</span> <span>— {info.title}</span></SelectItem>;
+                  return <TargetSelectItem key={t.code} targetCode={t.code} targetTitle={info.title} />;
                 })}
               </SelectContent>
             </Select>
