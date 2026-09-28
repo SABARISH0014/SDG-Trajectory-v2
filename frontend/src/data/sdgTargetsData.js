@@ -235,13 +235,68 @@ export function formatMetricValue(value, fallbackUnit = '') {
   return num.toFixed(2);
 }
 
+export const UN_BENCHMARKS = {
+  // Goal 1: Zero poverty
+  '1.1': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '1.2': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '1.3': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '1.4': { value: 100.0, label: 'UN 2030 Target: 100' },
+  // Goal 2: Zero hunger
+  '2.1': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '2.2': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  // Goal 3: Good health
+  '3.1': { value: 70.0, label: 'UN 2030 Target: < 70 per 100k' },
+  '3.2': { value: 25.0, label: 'UN 2030 Target: ≤ 25 per 1,000' },
+  '3.6': { value: 5.0, label: 'UN 2030 Target: Low mortality' },
+  '3.8': { value: 80.0, label: 'UN 2030 Target: ≥ 80 Index' },
+  // Goal 4: Quality education
+  '4.1': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '4.2': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '4.6': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  // Goal 5: Gender equality
+  '5.1': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '5.2': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '5.3': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '5.5': { value: 50.0, label: 'UN 2030 Target: 50% Parity' },
+  // Goal 6: Clean water
+  '6.1': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '6.2': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  // Goal 7: Clean energy
+  '7.1': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '7.2': { value: 60.0, label: 'UN 2030 Benchmark: ≥ 60%' },
+  // Goal 8: Decent work
+  '8.5': { value: 3.5, label: 'UN 2030 Benchmark: ≤ 3.5%' },
+  '8.7': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '8.10': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  // Goal 9: Industry & Innovation
+  '9.c': { value: 100.0, label: 'UN 2030 Target: 100% 4G/5G' },
+  // Goal 10: Reduced inequalities
+  '10.2': { value: 0.0, label: 'UN 2030 Target: Minimal' },
+  // Goal 11: Sustainable cities
+  '11.1': { value: 0.0, label: 'UN 2030 Target: 0.0% Slums' },
+  '11.6': { value: 10.0, label: 'WHO Air Limit: ≤ 10 µg/m³' },
+  // Goal 13: Climate action
+  '13.2': { value: 2.0, label: 'Paris Net-Zero Path: ≤ 2.0 t/cap' },
+  // Goal 14: Life below water
+  '14.5': { value: 10.0, label: 'UN 2030 Target: ≥ 10% MPAs' },
+  // Goal 15: Life on land
+  '15.1': { value: 35.0, label: 'Global Green Target: ≥ 35%' },
+  // Goal 16: Peace & Justice
+  '16.1': { value: 0.0, label: 'UN 2030 Target: Low Violence' },
+  '16.9': { value: 100.0, label: 'UN 2030 Target: 100% Birth Reg.' },
+  // Goal 17: Partnerships
+  '17.8': { value: 100.0, label: 'UN 2030 Target: 100% Internet' },
+};
+
 /**
  * Get comprehensive metadata for any target code
  */
 export function getTargetDetails(targetCode, goalNumber = null) {
+  const goalNum = goalNumber || parseInt(targetCode?.split('.')[0], 10) || 1;
+  const benchmark = UN_BENCHMARKS[targetCode] || null;
+
   if (ALL_SDG_TARGETS[targetCode]) {
     const data = ALL_SDG_TARGETS[targetCode];
-    const goalNum = goalNumber || parseInt(targetCode?.split('.')[0], 10) || 1;
     return {
       code: targetCode,
       goalNumber: goalNum,
@@ -251,10 +306,11 @@ export function getTargetDetails(targetCode, goalNumber = null) {
       unit: data.unit,
       polarity: data.polarity,
       impactOnGoal: data.impact,
+      benchmarkValue: benchmark ? benchmark.value : null,
+      benchmarkLabel: benchmark ? benchmark.label : null,
     };
   }
 
-  const goalNum = goalNumber || parseInt(targetCode?.split('.')[0], 10) || 1;
   const isLowerBetter = ['1.1', '1.2', '1.5', '2.1', '2.2', '2.c', '3.1', '3.2', '3.3', '3.4', '3.6', '3.9', '3.a', '5.2', '5.3', '5.4', '6.4', '8.3', '8.4', '8.5', '8.6', '8.7', '8.8', '9.4', '10.2', '10.3', '10.7', '10.c', '11.1', '11.3', '11.5', '11.6', '12.2', '12.3', '12.c', '13.2', '14.1', '15.3', '15.7', '16.1', '16.2', '16.3', '16.4', '16.5', '16.10', '17.4', '17.10', '17.12'].includes(targetCode);
 
   return {
@@ -268,6 +324,8 @@ export function getTargetDetails(targetCode, goalNumber = null) {
     impactOnGoal: isLowerBetter
       ? `Reducing this indicator directly advances Goal ${goalNum} by eliminating critical systemic bottlenecks and protecting vulnerable populations.`
       : `Expanding this indicator serves as a positive catalyst for Goal ${goalNum}, enhancing public infrastructure and community resilience.`,
+    benchmarkValue: benchmark ? benchmark.value : null,
+    benchmarkLabel: benchmark ? benchmark.label : null,
   };
 }
 

@@ -1,7 +1,7 @@
 import { API_BASE_URL } from '@/config';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Sparkles, Loader2, Bot, User } from 'lucide-react';
+import { X, Send, Sparkles, Loader2, Bot, User, RotateCcw, HelpCircle } from 'lucide-react';
 import { Button } from './ui/Button';
 
 export default function CopilotDrawer({ context }) {
@@ -11,11 +11,33 @@ export default function CopilotDrawer({ context }) {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
-  const chips = [
-    `Why is this target classified as ${context?.status || 'its current status'}?`,
-    "What policy interventions can close the gap by 2030?",
-    "Summarize the 2015-2030 trajectory in 2 sentences."
-  ];
+  // Dynamic status-aware starter chips
+  const chips = useMemo(() => {
+    const country = context?.countryName || 'the nation';
+    const target = context?.selectedTarget || 'this indicator';
+    const status = context?.status || 'Unknown';
+    const unit = context?.unit || '';
+
+    if (status === 'On-track' || status === 'Achieved') {
+      return [
+        `How can ${country} sustain this positive progress beyond 2030?`,
+        `What external economic risks could derail this trajectory?`,
+        `Draft a 3-bullet executive brief celebrating this milestone.`
+      ];
+    } else if (status === 'At-risk' || status === 'Lagging' || status === 'Off-track') {
+      return [
+        `What policy interventions can close the ${unit ? `gap (${unit})` : 'gap'} by 2030?`,
+        `Why is ${country} lagging behind the UN 2030 benchmark?`,
+        `Suggest 3 high-impact, cost-effective budget priorities for Target ${target}.`
+      ];
+    }
+
+    return [
+      `Why is this target classified as ${status}?`,
+      `What policy interventions can close the gap by 2030?`,
+      `Summarize the 2015-2030 trajectory in 2 sentences.`
+    ];
+  }, [context?.status, context?.countryName, context?.selectedTarget, context?.unit]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,19 +58,30 @@ export default function CopilotDrawer({ context }) {
     setIsLoading(true);
 
     try {
-      // Create a context snapshot limited to the latest 5 records to save tokens
-      const recentData = context?.historicalData 
-        ? context.historicalData.slice(-5) 
-        : [];
+      // 1. Separate actual historical records (years with real observations) from future projections
+      const chartRows = Array.isArray(context?.historicalData) ? context.historicalData : [];
+      const actualHistorical = chartRows
+        .filter(d => d.actualValue !== null && d.actualValue !== undefined)
+        .slice(-5)
+        .map(d => ({ Year: d.Year, Value: d.actualValue }));
 
-      const systemPrompt = `You are an expert UN SDG Senior Policy Advisor. Ground your answers strictly on the provided country statistical context. Provide concise, actionable bullet points. 
-Context: 
-Country: ${context?.countryName} (${context?.countryCode})
-Target: ${context?.selectedTarget}
-Baseline Value: ${context?.baselineValue}
-Projected 2030 Value: ${context?.projectedValue2030}
-Status: ${context?.status}
-Recent Data Trends: ${JSON.stringify(recentData)}`;
+      const projectedFuture = chartRows
+        .filter(d => d.predictedValue !== null && d.predictedValue !== undefined && d.Year >= 2025)
+        .map(d => ({ Year: d.Year, Projected: d.predictedValue }));
+
+      const systemPrompt = `You are an expert UN SDG Senior Policy Advisor. Ground your answers strictly on the provided country statistical context. Provide concise, structured, actionable bullet points. Avoid filler text.
+
+Statistical Context:
+- Country: ${context?.countryName || 'Unknown'} (${context?.countryCode || 'N/A'})
+- Target: ${context?.selectedTarget || 'N/A'} ${context?.targetName ? `- ${context.targetName}` : ''}
+- Unit: ${context?.unit || 'Index/Rate'}
+- Polarity: ${context?.polarity === 'lower_is_better' ? 'Lower value is better (reduction desired)' : 'Higher value is better (increase desired)'}
+- Baseline Value (2015): ${context?.baselineValue ?? 'N/A'}
+- Projected 2030 Value: ${context?.projectedValue2030 ?? 'N/A'}
+- UN Official 2030 Benchmark: ${context?.benchmarkValue !== null && context?.benchmarkValue !== undefined ? `${context.benchmarkValue} (${context?.benchmarkLabel || 'Target'})` : 'No rigid quantitative cap'}
+- Trajectory Status: ${context?.status || 'Unknown'}
+- Recent Historical Actuals: ${JSON.stringify(actualHistorical)}
+- 2025-2030 Projections: ${JSON.stringify(projectedFuture)}`;
 
       const apiMessages = [
         { role: 'system', content: systemPrompt },
@@ -72,12 +105,13 @@ Recent Data Trends: ${JSON.stringify(recentData)}`;
       }
 
       const data = await response.json();
-      const reply = data.content;
+      const reply = data.content || '';
 
-      // Simple markdown-to-html conversion for bold and newlines
+      // Markdown-to-html conversion for bold, italics, bullets and line breaks
       const formattedReply = reply
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/^\s*[-*]\s+(.*)$/gm, '• $1')
         .replace(/\n/g, '<br/>');
 
       setMessages(prev => [...prev, { role: 'assistant', content: formattedReply }]);
@@ -90,6 +124,10 @@ Recent Data Trends: ${JSON.stringify(recentData)}`;
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleClearChat = () => {
+    setMessages([]);
   };
 
   return (
@@ -129,16 +167,36 @@ Recent Data Trends: ${JSON.stringify(recentData)}`;
                   <Bot className="w-5 h-5 text-indigo-200" />
                 </div>
                 <div>
-                  <h3 className="notranslate font-serif font-bold leading-tight">SDG Policy Copilot</h3>
-                  <p className="text-xs text-indigo-200 opacity-80">Powered by AI</p>
+                  <h3 className="notranslate font-serif font-bold leading-tight flex items-center gap-2">
+                    <span>SDG Policy Copilot</span>
+                    {context?.countryCode && (
+                      <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-indigo-500/40 text-indigo-100">
+                        {context.countryCode}
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-indigo-200 opacity-80 truncate max-w-[200px]">
+                    Target {context?.selectedTarget || 'Indicator Advisory'}
+                  </p>
                 </div>
               </div>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="text-slate-300 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors focus:outline-none"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                {messages.length > 0 && (
+                  <button 
+                    onClick={handleClearChat}
+                    title="Reset Conversation"
+                    className="text-slate-300 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors focus:outline-none"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                )}
+                <button 
+                  onClick={() => setIsOpen(false)}
+                  className="text-slate-300 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors focus:outline-none"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Chat Area */}

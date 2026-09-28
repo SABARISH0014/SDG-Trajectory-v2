@@ -1,12 +1,14 @@
 import { API_BASE_URL } from '@/config';
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { SlidersHorizontal, Play, Info, Sparkles, BookOpen, HelpCircle, Loader2 } from 'lucide-react';
+import { SlidersHorizontal, Play, Info, Sparkles, BookOpen, HelpCircle, Loader2, Home, ChevronRight, Globe2 } from 'lucide-react';
+import Navbar from '../components/Navbar';
 import { Button } from '../components/ui/Button';
 import ExportDossierButton from '../components/ExportDossierButton';
 import SplashScreenOverlay from '../components/SplashScreenOverlay';
 import { TARGETS, COUNTRIES } from '../lib/constants';
-import { getTargetDetails, generateLaymanInsight, generateDynamicLaymanInsight, formatMetricValue } from '../data/sdgTargetsData';
+import { getTargetDetails, generateDynamicLaymanInsight, formatMetricValue } from '../data/sdgTargetsData';
 import {
   LineChart,
   Line,
@@ -15,7 +17,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend
+  Legend,
+  ReferenceLine
 } from 'recharts';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Badge } from '../components/ui/Badge';
@@ -56,40 +59,56 @@ const formatLargeNumber = (value) => {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
 };
 
-export default function PolicySimulator({ goalNumber }) {
-  const [selectedCountry, setSelectedCountry] = useState('IND');
+export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // Filter targets to this goal if goalNumber is provided
+  // URL query params initialization
+  const urlCountry = searchParams.get('country');
+  const urlTarget = searchParams.get('target');
+  const urlGoal = searchParams.get('goal');
+  const urlMultiplier = parseFloat(searchParams.get('multiplier') || '1.0');
+
+  const effectiveGoalNumber = goalNumber || (urlGoal ? parseInt(urlGoal, 10) : null);
+
+  const [selectedCountry, setSelectedCountry] = useState(() => {
+    if (urlCountry && COUNTRIES.some(c => c.code === urlCountry)) return urlCountry;
+    return 'IND';
+  });
+
+  // Filter targets to this goal if effectiveGoalNumber is provided
   const filteredTargets = useMemo(() => {
-    if (!goalNumber) return TARGETS;
+    if (!effectiveGoalNumber) return TARGETS;
     return TARGETS.filter(t => {
       const goalPart = parseInt(t.code.split('.')[0], 10);
-      return goalPart === goalNumber;
+      return goalPart === effectiveGoalNumber;
     });
-  }, [goalNumber]);
+  }, [effectiveGoalNumber]);
 
   const [selectedTarget, setSelectedTarget] = useState(() => {
-    if (goalNumber) {
-      const first = TARGETS.find(t => parseInt(t.code.split('.')[0], 10) === goalNumber);
-      return first ? first.code : '13.2';
+    if (urlTarget && TARGETS.some(t => t.code === urlTarget)) return urlTarget;
+    if (effectiveGoalNumber) {
+      const first = TARGETS.find(t => parseInt(t.code.split('.')[0], 10) === effectiveGoalNumber);
+      return first ? first.code : '1.1';
     }
-    return '13.2';
+    return '1.1';
   });
 
   useEffect(() => {
     if (!filteredTargets.find(t => t.code === selectedTarget)) {
-      setSelectedTarget(filteredTargets[0]?.code || '13.2');
+      setSelectedTarget(filteredTargets[0]?.code || '1.1');
     }
-  }, [goalNumber, filteredTargets, selectedTarget]);
+  }, [effectiveGoalNumber, filteredTargets, selectedTarget]);
 
-  const [policyMultiplier, setPolicyMultiplier] = useState(1.0);
+  const [policyMultiplier, setPolicyMultiplier] = useState(
+    !isNaN(urlMultiplier) && urlMultiplier >= 0.5 && urlMultiplier <= 1.5 ? urlMultiplier : 1.0
+  );
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [simulatedStatus, setSimulatedStatus] = useState(null);
 
   const targetInfo = useMemo(() => {
-    return getTargetDetails(selectedTarget, goalNumber);
-  }, [selectedTarget, goalNumber]);
+    return getTargetDetails(selectedTarget, effectiveGoalNumber);
+  }, [selectedTarget, effectiveGoalNumber]);
 
   const handleSimulate = async () => {
     setLoading(true);
@@ -147,25 +166,31 @@ export default function PolicySimulator({ goalNumber }) {
     }
   };
 
+  // Auto-run simulation on initial load if standalone
+  useEffect(() => {
+    if (!isEmbedded && !data) {
+      handleSimulate();
+    }
+  }, []);
+
   const getMultiplierLabel = (val) => {
     if (val === 1.0) return "Baseline Pace (1.0x)";
     if (val > 1.0) return `Accelerated (+${Math.round((val - 1.0) * 100)}% speed)`;
     return `Decelerated (-${Math.round((1.0 - val) * 100)}% speed)`;
   };
 
-  return (
+  const content = (
     <div className="w-full space-y-6">
-      
       {/* Header & Layman Description */}
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <SlidersHorizontal className="w-6 h-6 text-navy" />
-          <h3 className="text-2xl font-serif font-bold text-warm-gray">What-If Policy Simulator</h3>
+          <SlidersHorizontal className="w-6 h-6 text-emerald-600" />
+          <h2 className="text-2xl md:text-3xl font-serif font-bold text-warm-gray">What-If Policy Simulator</h2>
         </div>
         <p className="text-sm text-slate-600 max-w-3xl leading-relaxed">
-          Test how different policy decisions, investments, or disruptions could transform future outcomes. 
+          Test how different policy decisions, investments, or disruptions transform future outcomes. 
           Adjust the policy speed slider below to simulate how accelerated implementation or systemic slowdowns 
-          will shift this country's 2030 results.
+          shift this country's 2030 results.
         </p>
       </div>
 
@@ -218,7 +243,7 @@ export default function PolicySimulator({ goalNumber }) {
               </SelectTrigger>
               <SelectContent>
                 {filteredTargets.map(t => {
-                  const info = getTargetDetails(t.code, goalNumber);
+                  const info = getTargetDetails(t.code, effectiveGoalNumber);
                   return <TargetSelectItem key={t.code} targetCode={t.code} targetTitle={info.title} />;
                 })}
               </SelectContent>
@@ -228,7 +253,7 @@ export default function PolicySimulator({ goalNumber }) {
           <div className="space-y-2">
             <div className="flex justify-between items-center text-sm font-medium text-slate-700">
               <span>Policy Multiplier</span>
-              <span className="text-navy font-bold px-2 py-0.5 rounded bg-navy/10 text-xs">
+              <span className="text-emerald-700 font-bold px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-xs">
                 {getMultiplierLabel(policyMultiplier)}
               </span>
             </div>
@@ -248,9 +273,21 @@ export default function PolicySimulator({ goalNumber }) {
             </div>
           </div>
 
-          <Button onClick={handleSimulate} disabled={loading} className="w-full h-11" size="lg">
-            {loading ? <><Loader2 className="animate-spin w-4 h-4 mr-2" /> <span>Simulating...</span></> : <><Play className="w-4 h-4 mr-2" /> <span>Run Simulation</span></>}
-          </Button>
+          <div className="flex gap-2">
+            {!isEmbedded && (
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/country/${selectedCountry}`)}
+                className="h-11 border-slate-200 text-slate-600 bg-white hover:bg-slate-50"
+                title="View country profile"
+              >
+                Profile
+              </Button>
+            )}
+            <Button onClick={handleSimulate} disabled={loading} className="flex-1 h-11 bg-emerald-600 hover:bg-emerald-700 text-white" size="lg">
+              {loading ? <><Loader2 className="animate-spin w-4 h-4 mr-2" /> <span>Simulating...</span></> : <><Play className="w-4 h-4 mr-2" /> <span>Run Simulation</span></>}
+            </Button>
+          </div>
         </div>
 
         {/* Policy Multiplier Simple Description */}
@@ -258,9 +295,9 @@ export default function PolicySimulator({ goalNumber }) {
           <HelpCircle className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
           <div className="leading-relaxed">
             <strong className="text-slate-800">What does the Policy Multiplier do? </strong>
-            The multiplier simulates how government funding, law enforcement, or external crises alter the velocity of change. 
-            A setting of <strong>1.2x</strong> simulates a <strong>20% speedup</strong> (e.g. increased budget, technology transfer, or policy reforms), 
-            while <strong>0.8x</strong> simulates a <strong>20% slowdown</strong> (e.g. austerity, supply bottlenecks, or delayed implementation).
+            The multiplier models how government budget allocations, technological transfers, or systemic shocks modify the rate of progress. 
+            A value of <strong>1.2x</strong> simulates a <strong>20% acceleration</strong>, 
+            while <strong>0.8x</strong> represents a <strong>20% deceleration</strong>.
           </div>
         </div>
       </div>
@@ -278,11 +315,16 @@ export default function PolicySimulator({ goalNumber }) {
           
           {/* Chart Container */}
           <div id="policy-simulator-chart-container" className="lg:col-span-2 border border-slate-200 bg-white p-6 rounded-lg shadow-sm">
-            <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-slate-100 gap-2">
               <div>
-                <h4 className="text-lg font-serif font-semibold text-warm-gray">
-                  Policy Scenario Trajectory (2015–2030)
-                </h4>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-lg font-serif font-semibold text-warm-gray">
+                    Policy Scenario Trajectory (2015–2030)
+                  </h4>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                    Y-Axis: {targetInfo.unit}
+                  </span>
+                </div>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Comparing baseline historical trajectory against simulated policy multiplier ({policyMultiplier.toFixed(1)}x).
                 </p>
@@ -319,8 +361,24 @@ export default function PolicySimulator({ goalNumber }) {
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend verticalAlign="top" height={36} iconType="circle" />
-                  <Line name="Historical Baseline" type="monotone" dataKey="actualValue" stroke="#1B2A4A" strokeWidth={2.5} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} />
-                  <Line name={`Simulated Policy Trajectory (${policyMultiplier.toFixed(1)}x)`} type="monotone" dataKey="predictedValue" stroke="#10b981" strokeWidth={2.5} strokeDasharray="5 5" dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: '#059669', strokeWidth: 2 }} />
+                  <Line name="Historical Baseline" type="monotone" dataKey="actualValue" stroke="#1B2A4A" strokeWidth={2.5} connectNulls={true} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} />
+                  <Line name={`Simulated Policy Trajectory (${policyMultiplier.toFixed(1)}x)`} type="monotone" dataKey="predictedValue" stroke="#10b981" strokeWidth={2.5} strokeDasharray="5 5" connectNulls={true} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: '#059669', strokeWidth: 2 }} />
+                  
+                  {targetInfo.benchmarkValue !== null && (
+                    <ReferenceLine 
+                      y={targetInfo.benchmarkValue} 
+                      stroke="#e11d48" 
+                      strokeDasharray="4 4" 
+                      strokeWidth={1.75}
+                      label={{ 
+                        value: targetInfo.benchmarkLabel || 'UN 2030 Benchmark', 
+                        fill: '#e11d48', 
+                        fontSize: 10, 
+                        fontWeight: 700, 
+                        position: 'insideTopRight' 
+                      }} 
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -359,7 +417,7 @@ export default function PolicySimulator({ goalNumber }) {
               <p className="text-sm text-slate-700 leading-relaxed font-medium pl-2 mb-3">
                 {generateDynamicLaymanInsight({
                   countryName: COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry,
-                  goalNumber: goalNumber || targetInfo.goalNumber,
+                  goalNumber: effectiveGoalNumber || targetInfo.goalNumber,
                   goalName: targetInfo.goalName,
                   targetCode: selectedTarget,
                   status: simulatedStatus || 'On-track',
@@ -399,6 +457,42 @@ export default function PolicySimulator({ goalNumber }) {
           <p className="text-sm font-medium text-slate-600">Select a country, target, and policy multiplier, then click <strong>Run Simulation</strong>.</p>
         </div>
       )}
+    </div>
+  );
+
+  if (isEmbedded) {
+    return content;
+  }
+
+  // Standalone Page Layout
+  return (
+    <div className="min-h-screen bg-cream text-warm-gray font-sans flex flex-col">
+      <Navbar />
+      
+      {/* Breadcrumb Bar */}
+      <div className="bg-slate-100 border-b border-slate-200 py-2.5 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex items-center gap-2 text-xs text-slate-500">
+          <Link to="/" className="hover:text-navy flex items-center gap-1">
+            <Home className="w-3.5 h-3.5" /> <span>Home</span>
+          </Link>
+          <ChevronRight className="w-3 h-3 text-slate-400" />
+          <span className="font-semibold text-navy">Policy Simulator</span>
+          {selectedCountry && (
+            <>
+              <ChevronRight className="w-3 h-3 text-slate-400" />
+              <span className="text-slate-700">{COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        {content}
+      </main>
+
+      <footer className="border-t border-slate-200 bg-cream mt-12 py-8 text-center text-xs text-slate-500">
+        <p>© 2026 SDG Trajectory — What-If Policy Simulation Model</p>
+      </footer>
     </div>
   );
 }

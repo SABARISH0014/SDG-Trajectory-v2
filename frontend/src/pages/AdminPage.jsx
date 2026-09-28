@@ -26,18 +26,18 @@ export default function AdminPage() {
       axios.get(`${API_BASE_URL}/api/admin/config`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-      .then(res => {
-        if (res.data && res.data.contamination !== undefined) {
-          setContamination(res.data.contamination);
-        }
-      })
-      .catch(err => {
-        console.error("Failed to fetch admin config:", err);
-        if (err.response && err.response.status === 401) {
-          alert("Your admin session has expired. Please log in again.");
-          handleLogout();
-        }
-      });
+        .then(res => {
+          if (res.data && res.data.contamination !== undefined) {
+            setContamination(res.data.contamination);
+          }
+        })
+        .catch(err => {
+          console.error("Failed to fetch admin config:", err);
+          if (err.response && err.response.status === 401) {
+            alert("Your admin session has expired. Please log in again.");
+            handleLogout();
+          }
+        });
     }
   }, [token]);
 
@@ -179,7 +179,7 @@ export default function AdminPage() {
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={handleLogout} className="text-slate-600 border-slate-200 hover:bg-slate-50 bg-white h-9 shadow-sm">
-            Secure Logout
+            Logout
           </Button>
         </div>
 

@@ -3,6 +3,11 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import './index.css'
+import { PWAProvider } from './context/PWAContext.jsx'
+import { registerServiceWorker } from './lib/registerServiceWorker.js'
+
+// Register Service Worker for offline capability & PWA installability
+registerServiceWorker();
 
 // Google Translate React crash patch
 // Prevents React from crashing when Google Translate modifies the DOM by replacing text nodes with <font> tags.
@@ -29,7 +34,9 @@ if (typeof Node === 'function' && Node.prototype) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <App />
+      <PWAProvider>
+        <App />
+      </PWAProvider>
     </BrowserRouter>
   </React.StrictMode>,
 )

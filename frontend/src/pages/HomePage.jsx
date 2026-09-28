@@ -2,14 +2,13 @@ import { API_BASE_URL } from '@/config';
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Search, ChevronDown, Globe2, ShieldCheck } from 'lucide-react';
+import { Search, ChevronDown, Globe2, ShieldCheck, SlidersHorizontal, Scale, ArrowRight, Sparkles } from 'lucide-react';
 import { sdgGoalsContent } from '../data/sdgGoalsContent';
 import { sdgColors } from '../data/sdgColors';
 import { COUNTRIES } from '../lib/constants';
 import GlobeView from '../components/GlobeView';
 import sdgGoalsImage from '../lib/SDG Goals.avif';
-import LanguageSwitcher from '../components/LanguageSwitcher';
-
+import Navbar from '../components/Navbar';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -76,33 +75,40 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-cream text-warm-gray font-sans">
-
+      <Navbar />
 
       {/* ===== SECTION 1: Dark Hero Header with SDG image ===== */}
       <section className="bg-navy text-white relative">
-        <div className="absolute top-6 right-6 z-50">
-          <LanguageSwitcher />
-        </div>
-        <div className="max-w-7xl mx-auto px-6 md:px-12 py-20 md:py-28 flex flex-col lg:flex-row items-center justify-between gap-12">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 py-16 md:py-24 flex flex-col lg:flex-row items-center justify-between gap-12">
           {/* Left: Text */}
           <div className="lg:w-[50%] flex-shrink-0">
-            <p className="text-sm uppercase tracking-[0.2em] text-slate-400 mb-4 font-semibold">presents</p>
+            <p className="text-sm uppercase tracking-[0.2em] text-slate-400 mb-4 font-semibold">UN Sustainable Development Goals</p>
             <h1 className="notranslate text-5xl md:text-7xl font-serif font-bold leading-[1.15] mb-6">
               SDG Trajectory
               <br />
-              <span className="font-light text-slate-300 text-4xl md:text-5xl">of Sustainable Development Goals</span>
+              <span className="font-light text-slate-300 text-3xl md:text-5xl">Global Outcome Forecaster</span>
               <br />
               <span className="text-teal-400 text-5xl md:text-7xl">2030</span>
             </h1>
             <p className="text-lg md:text-xl text-slate-300 max-w-2xl leading-relaxed mb-8">
-              The SDG Trajectory presents interactive forecasting and data visualizations
-              about the 17 Sustainable Development Goals. Explore trajectories, compare
-              countries, and simulate policy outcomes toward 2030.
+              Explore data-driven 2030 trajectories for all 17 Sustainable Development Goals. 
+              Analyze national profiles, benchmark country pairs, and test real-world policy scenarios.
             </p>
-            <Link to="/admin" className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 hover:text-white transition-all shadow-[0_0_15px_-3px_rgba(225,29,72,0.4)]">
-              <ShieldCheck className="w-5 h-5" />
-              <span className="font-semibold tracking-wide text-sm">Admin Portal</span>
-            </Link>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Link to="/countries" className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-teal-500 hover:bg-teal-600 text-white font-semibold text-sm transition-all shadow-lg shadow-teal-500/20">
+                <Globe2 className="w-4 h-4" />
+                <span>Explore 250+ Countries</span>
+              </Link>
+              <Link to="/simulator" className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/20 font-semibold text-sm transition-all">
+                <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
+                <span>Policy Simulator</span>
+              </Link>
+              <Link to="/compare" className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/20 font-semibold text-sm transition-all">
+                <Scale className="w-4 h-4 text-purple-400" />
+                <span>Benchmark</span>
+              </Link>
+            </div>
           </div>
 
           {/* Right: SDG Goals image */}
@@ -304,11 +310,19 @@ export default function HomePage() {
 
       {/* ===== FOOTER ===== */}
       <footer className="border-t border-slate-300 bg-cream">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 py-8 text-center text-sm text-slate-500">
-          <p>© 2026 SDG Trajectory — Academic Project Prototype</p>
-          <p className="mt-1 text-xs text-slate-400">
-            This tool is for educational and research purposes. Data sourced from the United Nations SDG API and Our World in Data.
-          </p>
+        <div className="max-w-7xl mx-auto px-6 md:px-12 py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+          <div className="text-center md:text-left">
+            <p className="font-semibold text-navy">© 2026 SDG Trajectory — Global Outcome Forecaster</p>
+            <p className="mt-1 text-xs text-slate-400">
+              Data sourced from United Nations SDG API, WHO, World Bank, FAOSTAT, UNICEF, ILOSTAT & UNESCO.
+            </p>
+          </div>
+          <div className="flex items-center gap-5 text-xs font-medium text-slate-600">
+            <Link to="/help" className="hover:text-teal-600 transition-colors">Documentation & Help</Link>
+            <Link to="/simulator" className="hover:text-teal-600 transition-colors">Policy Simulator</Link>
+            <Link to="/compare" className="hover:text-teal-600 transition-colors">Country Benchmarking</Link>
+            <Link to="/admin" className="hover:text-rose-600 transition-colors">Admin Portal</Link>
+          </div>
         </div>
       </footer>
     </div>

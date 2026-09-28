@@ -1,0 +1,69 @@
+{
+  "name": "SDG Trajectory — Atlas of Sustainable Development Goals",
+  "short_name": "SDG Trajectory",
+  "description": "Interactive forecasting and data visualizations about the 17 UN Sustainable Development Goals. Track trajectories toward 2030.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "categories": ["education", "analytics", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "17 Goals Atlas",
+      "short_name": "SDG Goals",
+      "description": "Explore all 17 UN Sustainable Development Goals and targets",
+      "url": "/goal/1",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Policy Simulator",
+      "short_name": "Simulator",
+      "description": "Simulate what-if intervention policies and accelerated trajectories",
+      "url": "/simulator",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Country Profiles",
+      "short_name": "Countries",
+      "description": "Inspect individual country scorecards and trend models",
+      "url": "/countries",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Country Benchmark",
+      "short_name": "Benchmark",
+      "description": "Compare sustainability performance across global regions",
+      "url": "/compare",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": []
+}

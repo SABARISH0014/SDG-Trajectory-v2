@@ -1,7 +1,9 @@
 import { API_BASE_URL } from '@/config';
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Scale, Play, Activity, Info, Trophy, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react';
+import { Scale, Play, Activity, Info, Trophy, TrendingUp, AlertTriangle, Loader2, Home, ChevronRight } from 'lucide-react';
+import Navbar from '../components/Navbar';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { TARGETS, COUNTRIES } from '../lib/constants';
@@ -16,7 +18,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend
+  Legend,
+  ReferenceLine
 } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import TargetSelectItem from '../components/TargetSelectItem';
@@ -27,32 +30,50 @@ const formatLargeNumber = (value) => {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
 };
 
-export default function CountryComparison({ goalNumber }) {
-  const [countryA, setCountryA] = useState('IND');
-  const [countryB, setCountryB] = useState('USA');
+export default function CountryComparison({ goalNumber, isEmbedded = false }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
-  // Filter targets to this goal if goalNumber is provided
+  const urlCountryA = searchParams.get('countryA') || searchParams.get('country');
+  const urlCountryB = searchParams.get('countryB');
+  const urlTarget = searchParams.get('target');
+  const urlGoal = searchParams.get('goal');
+
+  const effectiveGoalNumber = goalNumber || (urlGoal ? parseInt(urlGoal, 10) : null);
+
+  const [countryA, setCountryA] = useState(() => {
+    if (urlCountryA && COUNTRIES.some(c => c.code === urlCountryA)) return urlCountryA;
+    return 'IND';
+  });
+
+  const [countryB, setCountryB] = useState(() => {
+    if (urlCountryB && COUNTRIES.some(c => c.code === urlCountryB)) return urlCountryB;
+    return 'USA';
+  });
+
+  // Filter targets to this goal if effectiveGoalNumber is provided
   const filteredTargets = useMemo(() => {
-    if (!goalNumber) return TARGETS;
+    if (!effectiveGoalNumber) return TARGETS;
     return TARGETS.filter(t => {
       const goalPart = parseInt(t.code.split('.')[0], 10);
-      return goalPart === goalNumber;
+      return goalPart === effectiveGoalNumber;
     });
-  }, [goalNumber]);
+  }, [effectiveGoalNumber]);
 
   const [selectedTarget, setSelectedTarget] = useState(() => {
-    if (goalNumber) {
-      const first = TARGETS.find(t => parseInt(t.code.split('.')[0], 10) === goalNumber);
-      return first ? first.code : '13.2';
+    if (urlTarget && TARGETS.some(t => t.code === urlTarget)) return urlTarget;
+    if (effectiveGoalNumber) {
+      const first = TARGETS.find(t => parseInt(t.code.split('.')[0], 10) === effectiveGoalNumber);
+      return first ? first.code : '1.1';
     }
-    return '13.2';
+    return '1.1';
   });
 
   useEffect(() => {
     if (!filteredTargets.find(t => t.code === selectedTarget)) {
-      setSelectedTarget(filteredTargets[0]?.code || '13.2');
+      setSelectedTarget(filteredTargets[0]?.code || '1.1');
     }
-  }, [goalNumber, filteredTargets, selectedTarget]);
+  }, [effectiveGoalNumber, filteredTargets, selectedTarget]);
 
   const [loading, setLoading] = useState(false);
   const [dataA, setDataA] = useState(null);
@@ -62,8 +83,8 @@ export default function CountryComparison({ goalNumber }) {
   const countryBName = COUNTRIES.find(c => c.code === countryB)?.name || countryB;
 
   const targetInfo = useMemo(() => {
-    return getTargetDetails(selectedTarget, goalNumber);
-  }, [selectedTarget, goalNumber]);
+    return getTargetDetails(selectedTarget, effectiveGoalNumber);
+  }, [selectedTarget, effectiveGoalNumber]);
 
   const getBadgeVariant = (status) => {
     if (!status) return "default";
@@ -143,6 +164,13 @@ export default function CountryComparison({ goalNumber }) {
     setLoading(false);
   };
 
+  // Auto-run comparison on load if standalone
+  useEffect(() => {
+    if (!isEmbedded && !dataA && !dataB) {
+      handleCompare();
+    }
+  }, []);
+
   // Compute comparative analysis findings
   const comparativeInsights = useMemo(() => {
     if (!dataA || !dataB || dataA.error || dataB.error) return null;
@@ -195,7 +223,7 @@ export default function CountryComparison({ goalNumber }) {
     };
   }, [dataA, dataB, countryAName, countryBName, targetInfo]);
 
-  const renderDashboard = (data, title, color) => {
+  const renderDashboard = (data, title, color, countryCode) => {
     if (!data) return null;
     if (data.error) return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-400 bg-cream border border-slate-200 rounded-lg min-h-[420px]">
@@ -205,10 +233,18 @@ export default function CountryComparison({ goalNumber }) {
     );
     
     return (
-      <div className="flex-1 flex flex-col min-w-0 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden p-6 space-y-4">
+      <div className="flex-1 flex flex-col min-w-0 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-6 space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
-            <h4 className="font-bold text-warm-gray text-lg">{title}</h4>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="font-bold text-warm-gray text-lg">{title}</h4>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                {targetInfo.unit}
+              </span>
+              <Link to={`/country/${countryCode}`} className="text-[11px] text-teal-600 hover:underline font-medium">
+                (Profile)
+              </Link>
+            </div>
             <p className="text-xs text-slate-500">2015–2030 Trajectory Projection</p>
           </div>
           <Badge variant={getBadgeVariant(data.status)} className="px-3 py-1 text-xs font-semibold">{data.status}</Badge>
@@ -242,8 +278,24 @@ export default function CountryComparison({ goalNumber }) {
                 formatter={(val) => [`${formatLargeNumber(val)} ${targetInfo.unit}`, '']}
               />
               <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-              <Line name="Historical Data" type="monotone" dataKey="actualValue" stroke={color} strokeWidth={2.5} dot={{ r: 3.5 }} />
-              <Line name="Statistical Forecast (2030)" type="monotone" dataKey="predictedValue" stroke={color} strokeWidth={2.5} strokeDasharray="4 4" dot={{ r: 3.5 }} />
+              <Line name="Historical Data" type="monotone" dataKey="actualValue" stroke={color} strokeWidth={2.5} connectNulls={true} dot={{ r: 3.5 }} />
+              <Line name="Statistical Forecast (2030)" type="monotone" dataKey="predictedValue" stroke={color} strokeWidth={2.5} strokeDasharray="4 4" connectNulls={true} dot={{ r: 3.5 }} />
+              
+              {targetInfo.benchmarkValue !== null && (
+                <ReferenceLine 
+                  y={targetInfo.benchmarkValue} 
+                  stroke="#e11d48" 
+                  strokeDasharray="4 4" 
+                  strokeWidth={1.5}
+                  label={{ 
+                    value: targetInfo.benchmarkLabel || 'UN 2030 Benchmark', 
+                    fill: '#e11d48', 
+                    fontSize: 9, 
+                    fontWeight: 700, 
+                    position: 'insideTopRight' 
+                  }} 
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -251,13 +303,13 @@ export default function CountryComparison({ goalNumber }) {
     );
   };
 
-  return (
+  const content = (
     <div className="w-full space-y-6">
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <Scale className="w-6 h-6 text-navy" />
-          <h3 className="text-2xl font-serif font-bold text-warm-gray">Country Benchmarking Tool</h3>
+          <Scale className="w-6 h-6 text-purple-600" />
+          <h2 className="text-2xl md:text-3xl font-serif font-bold text-warm-gray">Country Benchmarking Tool</h2>
         </div>
         <p className="text-sm text-slate-600 max-w-3xl leading-relaxed">
           Compare SDG development paths side-by-side for two nations. Evaluate historical progress, identify performance leads, and compare 2030 statistical projections on standardized indicator metrics.
@@ -301,7 +353,7 @@ export default function CountryComparison({ goalNumber }) {
               </SelectTrigger>
               <SelectContent>
                 {filteredTargets.map(t => {
-                  const info = getTargetDetails(t.code, goalNumber);
+                  const info = getTargetDetails(t.code, effectiveGoalNumber);
                   return <TargetSelectItem key={t.code} targetCode={t.code} targetTitle={info.title} />;
                 })}
               </SelectContent>
@@ -336,7 +388,7 @@ export default function CountryComparison({ goalNumber }) {
             </Select>
           </div>
 
-          <Button onClick={handleCompare} disabled={loading} className="w-full h-11" size="lg">
+          <Button onClick={handleCompare} disabled={loading} className="w-full h-11 bg-purple-600 hover:bg-purple-700 text-white" size="lg">
             {loading ? <><Loader2 className="animate-spin w-4 h-4 mr-2" /> <span>Fetching Data...</span></> : <><Play className="w-4 h-4 mr-2" /> <span>Compare Trajectories</span></>}
           </Button>
         </div>
@@ -352,12 +404,12 @@ export default function CountryComparison({ goalNumber }) {
           </>
         ) : (dataA || dataB) ? (
           <>
-            {renderDashboard(dataA, countryAName, "#1B2A4A")}
-            {renderDashboard(dataB, countryBName, "#8b5cf6")}
+            {renderDashboard(dataA, countryAName, "#1B2A4A", countryA)}
+            {renderDashboard(dataB, countryBName, "#8b5cf6", countryB)}
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-400 space-y-3 bg-white border border-slate-200 rounded-lg min-h-[300px]">
-            <Scale className="w-12 h-12 opacity-30 text-navy" />
+            <Scale className="w-12 h-12 opacity-30 text-purple-600" />
             <p className="text-sm font-medium text-slate-600">Select two countries and click <strong>Compare Trajectories</strong> to view side-by-side benchmarking.</p>
           </div>
         )}
@@ -375,30 +427,29 @@ export default function CountryComparison({ goalNumber }) {
           <CardContent className="p-6 pt-0">
             {/* Quick Metrics Bar */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 py-2">
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-              <span className="text-xs text-slate-500 block font-medium">{countryAName} (Latest)</span>
-              <span className="text-lg font-bold text-navy">{formatLargeNumber(comparativeInsights.latestA)} {targetInfo.unit}</span>
-            </div>
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-              <span className="text-xs text-slate-500 block font-medium">{countryAName} (2030 Proj.)</span>
-              <span className="text-lg font-bold text-purple-600">{formatLargeNumber(comparativeInsights.pred2030A)} {targetInfo.unit}</span>
-            </div>
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-              <span className="text-xs text-slate-500 block font-medium">{countryBName} (Latest)</span>
-              <span className="text-lg font-bold text-navy">{formatLargeNumber(comparativeInsights.latestB)} {targetInfo.unit}</span>
-            </div>
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-              <span className="text-xs text-slate-500 block font-medium">{countryBName} (2030 Proj.)</span>
-              <span className="text-lg font-bold text-purple-600">{formatLargeNumber(comparativeInsights.pred2030B)} {targetInfo.unit}</span>
-            </div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-xs text-slate-500 block font-medium">{countryAName} (Latest)</span>
+                <span className="text-lg font-bold text-navy">{formatLargeNumber(comparativeInsights.latestA)} {targetInfo.unit}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-xs text-slate-500 block font-medium">{countryAName} (2030 Proj.)</span>
+                <span className="text-lg font-bold text-purple-600">{formatLargeNumber(comparativeInsights.pred2030A)} {targetInfo.unit}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-xs text-slate-500 block font-medium">{countryBName} (Latest)</span>
+                <span className="text-lg font-bold text-navy">{formatLargeNumber(comparativeInsights.latestB)} {targetInfo.unit}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-xs text-slate-500 block font-medium">{countryBName} (2030 Proj.)</span>
+                <span className="text-lg font-bold text-purple-600">{formatLargeNumber(comparativeInsights.pred2030B)} {targetInfo.unit}</span>
+              </div>
             </div>
 
-
-          {/* Layman Comparative Finding */}
-          <div className="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-lg text-sm text-slate-700 leading-relaxed">
-            <strong className="text-emerald-950 font-semibold">Key Finding: </strong>
-            {comparativeInsights.explanation}
-          </div>
+            {/* Layman Comparative Finding */}
+            <div className="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-lg text-sm text-slate-700 leading-relaxed mt-4">
+              <strong className="text-emerald-950 font-semibold">Key Finding: </strong>
+              {comparativeInsights.explanation}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -413,6 +464,38 @@ export default function CountryComparison({ goalNumber }) {
           </div>
         </div>
       )}
+    </div>
+  );
+
+  if (isEmbedded) {
+    return content;
+  }
+
+  // Standalone Page Layout
+  return (
+    <div className="min-h-screen bg-cream text-warm-gray font-sans flex flex-col">
+      <Navbar />
+      
+      {/* Breadcrumb Bar */}
+      <div className="bg-slate-100 border-b border-slate-200 py-2.5 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex items-center gap-2 text-xs text-slate-500">
+          <Link to="/" className="hover:text-navy flex items-center gap-1">
+            <Home className="w-3.5 h-3.5" /> <span>Home</span>
+          </Link>
+          <ChevronRight className="w-3 h-3 text-slate-400" />
+          <span className="font-semibold text-navy">Country Benchmarking</span>
+          <ChevronRight className="w-3 h-3 text-slate-400" />
+          <span className="text-slate-700">{countryAName} vs {countryBName}</span>
+        </div>
+      </div>
+
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        {content}
+      </main>
+
+      <footer className="border-t border-slate-200 bg-cream mt-12 py-8 text-center text-xs text-slate-500">
+        <p>© 2026 SDG Trajectory — Side-by-Side Country Benchmarking Engine</p>
+      </footer>
     </div>
   );
 }

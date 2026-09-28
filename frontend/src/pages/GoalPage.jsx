@@ -1,12 +1,32 @@
 import { API_BASE_URL } from '@/config';
 import React, { useState, useRef, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Home, Download, FileSpreadsheet, Sparkles, BookOpen, Info, TrendingUp, HelpCircle, Loader2, Search, ChevronDown, Globe2 } from 'lucide-react';
+import { 
+  Home, 
+  Download, 
+  FileSpreadsheet, 
+  Sparkles, 
+  BookOpen, 
+  Info, 
+  TrendingUp, 
+  HelpCircle, 
+  Loader2, 
+  Search, 
+  ChevronDown, 
+  Globe2, 
+  ChevronRight, 
+  SlidersHorizontal, 
+  Scale, 
+  Table, 
+  LineChart as ChartIcon,
+  Bot 
+} from 'lucide-react';
+import Navbar from '../components/Navbar';
 import { sdgGoalsContent } from '../data/sdgGoalsContent';
 import { sdgColors } from '../data/sdgColors';
 import { TARGETS, COUNTRIES } from '../lib/constants';
-import { getTargetDetails, generateLaymanInsight, generateDynamicLaymanInsight, formatMetricValue } from '../data/sdgTargetsData';
+import { getTargetDetails, generateDynamicLaymanInsight, formatMetricValue } from '../data/sdgTargetsData';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -15,10 +35,10 @@ import TargetSelectItem from '../components/TargetSelectItem';
 import PolicySimulator from './PolicySimulator';
 import CountryComparison from './CountryComparison';
 import GlobeView from '../components/GlobeView';
-import LanguageSwitcher from '../components/LanguageSwitcher';
 import ExportDossierButton from '../components/ExportDossierButton';
 import CopilotDrawer from '../components/CopilotDrawer';
 import SplashScreenOverlay from '../components/SplashScreenOverlay';
+import DataTableTab from '../components/tabs/DataTableTab';
 
 import {
   LineChart,
@@ -28,27 +48,29 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend
+  Legend,
+  ReferenceLine
 } from 'recharts';
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label, unit }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-slate-950 text-white border border-slate-700 shadow-2xl p-3 rounded-lg z-[100] text-xs pointer-events-none notranslate">
-        <p className="font-semibold text-slate-400 border-b border-slate-800 pb-1 mb-1.5">
-          Year (X): <span className="text-white font-bold">{label}</span>
+      <div className="bg-slate-950 text-white border border-slate-700 shadow-2xl p-3.5 rounded-xl z-[100] text-xs pointer-events-none notranslate min-w-[220px]">
+        <p className="font-semibold text-slate-400 border-b border-slate-800 pb-1.5 mb-2 flex items-center justify-between">
+          <span>Year (X):</span> <span className="text-white font-bold text-sm">{label}</span>
         </p>
         {payload.map((entry, index) => {
           if (entry.value === null || entry.value === undefined) return null;
           const isPredicted = entry.dataKey === 'predictedValue';
           return (
-            <div key={index} className="flex items-center justify-between gap-4 py-0.5">
-              <span className="flex items-center gap-1.5" style={{ color: entry.color }}>
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                {isPredicted ? 'Forecast (Y):' : 'Historical (Y):'}
+            <div key={index} className="flex items-center justify-between gap-3 py-1">
+              <span className="flex items-center gap-1.5 text-xs" style={{ color: entry.color }}>
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                {isPredicted ? '2030 Forecast:' : 'Historical Actual:'}
               </span>
-              <span className="font-mono font-bold text-white">
-                {new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 }).format(entry.value)}
+              <span className="font-mono font-bold text-white text-xs">
+                {new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(entry.value)}
+                {unit && <span className="ml-1 text-[10px] text-slate-400 font-normal">({unit})</span>}
               </span>
             </div>
           );
@@ -94,7 +116,6 @@ const SDG_SHORT_TITLES = {
   16: 'Peace, Justice & Strong Institutions', 17: 'Partnerships for the Goals',
 };
 
-// Task 3: Dynamic SDG Context Panel
 const SDG_CONTEXT_MAP = {
   '1.1': 'Eradicate extreme poverty for all people everywhere. Tracking the proportion of the population living below the international poverty line is critical to ensuring baseline economic security.',
   '2.1': 'End hunger and ensure access by all people to safe, nutritious and sufficient food all year round. This metric tracks the prevalence of undernourishment in the population.',
@@ -110,23 +131,46 @@ const getSDGContext = (targetCode) => {
   return SDG_CONTEXT_MAP[targetCode] || 'Strategic progress towards this target is crucial for achieving the broader SDG goal by 2030. Tracking this indicator helps ensure national policy remains aligned with global sustainability objectives.';
 };
 
-// Task 2: Large Number Formatting (UX Improvement)
-const formatLargeNumber = (value) => {
-  if (value === null || value === undefined) return '';
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
-};
-
 export default function GoalPage() {
-  
   const { goalNumber } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const goalNum = parseInt(goalNumber, 10);
   const goal = sdgGoalsContent.find(g => g.goalNumber === goalNum);
   const goalColor = sdgColors[goalNum] || '#1B2A4A';
   const [hoveredSidebarGoal, setHoveredSidebarGoal] = useState(null);
 
-  // Prediction state
-  const [selectedCountry, setSelectedCountry] = useState('IND');
+  // Tab State: 'forecast' | 'simulator' | 'benchmark' | 'datatable'
+  const urlTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(urlTab || 'forecast');
+
+  useEffect(() => {
+    if (urlTab && ['forecast', 'simulator', 'benchmark', 'datatable'].includes(urlTab)) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTab]);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('tab', tabId);
+    setSearchParams(newParams, { replace: true });
+  };
+
+  // Prediction state & URL param initialization
+  const urlCountry = searchParams.get('country');
+  const urlTarget = searchParams.get('target');
+
+  const [selectedCountry, setSelectedCountry] = useState(() => {
+    if (urlCountry && COUNTRIES.some(c => c.code === urlCountry)) return urlCountry;
+    return 'IND';
+  });
+
+  useEffect(() => {
+    if (urlCountry && COUNTRIES.some(c => c.code === urlCountry)) {
+      setSelectedCountry(urlCountry);
+    }
+  }, [urlCountry]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -137,13 +181,19 @@ export default function GoalPage() {
     const gp = parseInt(t.code.split('.')[0], 10);
     return gp === goalNum;
   });
-  const [selectedTarget, setSelectedTarget] = useState(goalTargets[0]?.code || '1.1');
+
+  const [selectedTarget, setSelectedTarget] = useState(() => {
+    if (urlTarget && goalTargets.some(t => t.code === urlTarget)) return urlTarget;
+    return goalTargets[0]?.code || `${goalNum}.1`;
+  });
   
   useEffect(() => {
-    if (!goalTargets.find(t => t.code === selectedTarget)) {
-      setSelectedTarget(goalTargets[0]?.code || '1.1');
+    if (urlTarget && goalTargets.some(t => t.code === urlTarget)) {
+      setSelectedTarget(urlTarget);
+    } else if (!goalTargets.find(t => t.code === selectedTarget)) {
+      setSelectedTarget(goalTargets[0]?.code || `${goalNum}.1`);
     }
-  }, [goalNum, goalTargets, selectedTarget]);
+  }, [goalNum, goalTargets, selectedTarget, urlTarget]);
   
   const [loading, setLoading] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
@@ -152,7 +202,7 @@ export default function GoalPage() {
   const handleGenerate = async () => {
     setLoading(true);
     setDashboardData(null);
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     try {
       const response = await axios.get(`${API_BASE_URL}/api/predict`, {
@@ -161,15 +211,12 @@ export default function GoalPage() {
       
       const { historical_data, predictions, status, ai_narrative } = response.data;
       
-      // Map both arrays
       const histMapped = historical_data.map(d => ({ Year: parseInt(d.Year), actualValue: d.IndicatorValue, predictedValue: null }));
       const predMapped = predictions.map(p => ({ Year: parseInt(p.Year), actualValue: null, predictedValue: p.PredictedValue }));
       
-      // Combine and strictly sort by Year
       let chartData = [...histMapped, ...predMapped];
       chartData.sort((a, b) => a.Year - b.Year);
 
-      // Identify unique years and merge overlaps
       const mergedDataMap = new Map();
       chartData.forEach(item => {
         if (mergedDataMap.has(item.Year)) {
@@ -185,7 +232,6 @@ export default function GoalPage() {
       });
       chartData = Array.from(mergedDataMap.values()).sort((a, b) => a.Year - b.Year);
 
-      // The "Bridge": stitch the solid line and dashed line together
       const lastHistoricalIndex = chartData.map(d => d.actualValue !== null).lastIndexOf(true);
       if (lastHistoricalIndex !== -1) {
         const finalHistoricalYear = chartData[lastHistoricalIndex].Year;
@@ -194,7 +240,6 @@ export default function GoalPage() {
             d.predictedValue = null;
           }
         });
-        // Copy the last historical actual value into its predictedValue slot to anchor the forecast line
         chartData[lastHistoricalIndex].predictedValue = chartData[lastHistoricalIndex].actualValue;
       }
 
@@ -213,6 +258,13 @@ export default function GoalPage() {
       setLoading(false);
     }
   };
+
+  // Auto-generate forecast on initial page load if not loaded yet
+  useEffect(() => {
+    if (!dashboardData && !loading) {
+      handleGenerate();
+    }
+  }, [selectedCountry, selectedTarget]);
 
   const getBadgeVariant = (status) => {
     if (!status) return "default";
@@ -251,10 +303,9 @@ export default function GoalPage() {
     
     const serializer = new XMLSerializer();
     let source = serializer.serializeToString(svgElement);
-    if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
-        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+      source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
     }
-    // Add default font family to the SVG source so it renders nicely in the PNG
     source = source.replace('<svg ', '<svg style="font-family: sans-serif;" ');
 
     const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
@@ -290,59 +341,48 @@ export default function GoalPage() {
     );
   }
 
+  const countryName = COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry;
+  const targetInfo = getTargetDetails(selectedTarget, goalNum);
+
   return (
     <div className="min-h-screen flex flex-col bg-cream">
-      
-      {/* ===== TOP HEADER BAR ===== */}
-      <header className="fixed top-0 left-0 w-full h-14 bg-navy/95 backdrop-blur-md z-50 border-b border-white/10 flex items-center px-6">
-        <div className="flex items-center justify-between w-full max-w-7xl mx-auto">
-          {/* Left: Logo */}
-          <Link to="/" className="text-sm font-semibold tracking-wide hover:text-slate-300 transition-colors text-white">
-            SDG Trajectory
-          </Link>
-          
-          {/* Center: 17 SDG dots */}
-          <div className="hidden md:flex items-center gap-1.5">
-            {Array.from({ length: 17 }, (_, i) => i + 1).map(num => (
-              <Link
-                key={num}
-                to={`/goal/${num}`}
-                className="block rounded-full transition-all duration-150"
-                style={{ 
-                  backgroundColor: sdgColors[num],
-                  width: num === goalNum ? '14px' : '8px',
-                  height: num === goalNum ? '14px' : '8px',
-                  opacity: num === goalNum ? 1 : 0.6,
-                }}
-                title={`Goal ${num}: ${sdgGoalsContent[num - 1]?.title}`}
-              />
-            ))}
+      <Navbar />
+
+      {/* ===== BREADCRUMB BAR ===== */}
+      <div className="bg-slate-100 border-b border-slate-200 py-2.5 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Link to="/" className="hover:text-navy flex items-center gap-1">
+              <Home className="w-3.5 h-3.5" /> <span>Home</span>
+            </Link>
+            <ChevronRight className="w-3 h-3 text-slate-400" />
+            <Link to="/countries" className="hover:text-navy">
+              Goals
+            </Link>
+            <ChevronRight className="w-3 h-3 text-slate-400" />
+            <span className="font-semibold text-navy">
+              Goal {goalNum}: {goal.title}
+            </span>
           </div>
-          
-          {/* Right: Language and Country selector */}
-          <div className="flex items-center gap-4">
-            <LanguageSwitcher />
-            <div className="w-48">
-              <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-                <SelectTrigger className="w-full h-8 bg-white border-slate-200 text-xs text-navy font-medium shadow-sm hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-white/20">
-                  <SelectValue placeholder="Select Country" />
-                </SelectTrigger>
-                <SelectContent>
-                  {COUNTRIES.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/country/${selectedCountry}`}
+              className="text-xs text-teal-700 hover:underline font-semibold flex items-center gap-1"
+            >
+              <Globe2 className="w-3.5 h-3.5" />
+              <span>{countryName} Macro Profile</span>
+            </Link>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="flex flex-1 min-h-0 pt-14">
+      <div className="flex flex-1 min-h-0">
         
-        {/* ===== LEFT SIDEBAR — Light theme ===== */}
-        <aside className="hidden lg:flex flex-col bg-cream border-r border-slate-200 w-16 flex-shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] z-40 pb-20">
-          {/* Home icon */}
+        {/* ===== LEFT SIDEBAR — 17 SDG Quick Nav ===== */}
+        <aside className="hidden lg:flex flex-col bg-cream border-r border-slate-200 w-16 flex-shrink-0 sticky top-16 h-[calc(100vh-4rem)] z-40 pb-20">
           <div className="flex justify-center pt-4 pb-2 border-b border-slate-200/50 mb-2">
-            <Link to="/" className="w-9 h-9 flex items-center justify-center rounded-md bg-white border border-slate-200 text-slate-500 hover:text-navy hover:bg-indigo-50 hover:border-indigo-200 hover:shadow-sm transition-all">
+            <Link to="/" className="w-9 h-9 flex items-center justify-center rounded-md bg-white border border-slate-200 text-slate-500 hover:text-navy hover:bg-indigo-50 hover:border-indigo-200 hover:shadow-sm transition-all" title="Home">
               <Home className="w-4 h-4" />
             </Link>
           </div>
@@ -351,8 +391,6 @@ export default function GoalPage() {
             <p className="text-[8px] uppercase tracking-wider text-slate-400 text-center leading-tight"><span>Explore</span><br/><span>17 SDGs</span></p>
           </div>
           
-          {/* Goal numbers with hover tooltip */}
-          {/* W-96 hack allows tooltips to escape the overflow-y-auto clipping without blocking clicks */}
           <div className="flex-1 relative w-16">
             <nav className="absolute inset-0 w-96 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pointer-events-none flex flex-col items-start py-1">
               {Array.from({ length: 17 }, (_, i) => i + 1).map(num => {
@@ -361,7 +399,7 @@ export default function GoalPage() {
                 return (
                   <div key={num} className="relative w-16 flex justify-center mb-0.5 pointer-events-auto">
                     <Link
-                      to={`/goal/${num}`}
+                      to={`/goal/${num}${selectedCountry ? `?country=${selectedCountry}` : ''}`}
                       className="w-9 h-9 flex items-center justify-center text-xs font-bold rounded transition-all duration-150"
                       style={{
                         backgroundColor: isActive ? sdgColors[num] : (isHovered ? sdgColors[num] + '20' : 'transparent'),
@@ -372,16 +410,15 @@ export default function GoalPage() {
                     >
                       {num}
                     </Link>
-                    {/* Hover tooltip — shows short title */}
                     <div
                       className={`absolute left-[3.75rem] top-1/2 -translate-y-1/2 whitespace-nowrap z-50 pointer-events-none transition-all duration-200 ease-out ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'}`}
                     >
-                    <div
-                      className="flex items-center px-3 py-1.5 rounded text-xs font-semibold text-white shadow-lg"
-                      style={{ backgroundColor: sdgColors[num], borderLeft: `3px solid ${sdgColors[num]}` }}
-                    >
-                      {SDG_SHORT_TITLES[num]}
-                    </div>
+                      <div
+                        className="flex items-center px-3 py-1.5 rounded text-xs font-semibold text-white shadow-lg"
+                        style={{ backgroundColor: sdgColors[num], borderLeft: `3px solid ${sdgColors[num]}` }}
+                      >
+                        {SDG_SHORT_TITLES[num]}
+                      </div>
                     </div>
                   </div>
                 );
@@ -393,12 +430,11 @@ export default function GoalPage() {
         {/* ===== MAIN CONTENT ===== */}
         <main className="flex-1 min-w-0 overflow-y-auto">
           
-          {/* Goal Hero Section — Gradient background and subtle glow */}
+          {/* Goal Hero Section */}
           <section className="text-white py-16 px-6 md:px-12 bg-gradient-to-br from-navy via-[#1e293b] to-navy">
             <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-10 lg:gap-8 items-center lg:items-start">
-              {/* Left: Description (~52%) */}
+              {/* Left: Description */}
               <div className="lg:w-[52%] flex-shrink-0">
-                {/* Goal number + title with colored underline */}
                 <div className="mb-2">
                   <span
                     className="text-6xl md:text-8xl font-serif font-bold"
@@ -410,7 +446,6 @@ export default function GoalPage() {
                     {goal.title}
                   </span>
                 </div>
-                {/* Colored underline */}
                 <div className="h-0.5 w-32 mb-8" style={{ backgroundColor: goalColor }} />
 
                 <h2 className="text-2xl md:text-3xl font-serif font-bold text-white leading-snug mb-6">
@@ -441,7 +476,7 @@ export default function GoalPage() {
                 </div>
               </div>
 
-              {/* Right: Rotating Globe (~48%) — bigger, with ring touching edges */}
+              {/* Right: Rotating Globe */}
               <div className="lg:w-[48%] flex justify-center items-center lg:sticky lg:top-20 py-4">
                 <div className="relative flex justify-center items-center rounded-full shadow-[0_0_60px_-15px_rgba(59,130,246,0.3)] bg-gradient-to-b from-transparent to-blue-50/20 p-4">
                   <GlobeView
@@ -456,78 +491,142 @@ export default function GoalPage() {
             </div>
           </section>
 
-          {/* Predictions Section */}
-          <section className="py-12 px-6 md:px-12 bg-cream border-b border-slate-200">
+          {/* ===== TABBED NAVIGATION BAR ===== */}
+          <section className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+            <div className="max-w-6xl mx-auto px-6 md:px-12 flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              <button
+                type="button"
+                onClick={() => handleTabChange('forecast')}
+                className={`py-4 px-4 font-serif font-bold text-sm flex items-center gap-2 border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === 'forecast'
+                    ? 'text-navy border-navy'
+                    : 'text-slate-500 border-transparent hover:text-slate-800'
+                }`}
+                style={{ borderColor: activeTab === 'forecast' ? goalColor : 'transparent' }}
+              >
+                <ChartIcon className="w-4 h-4" />
+                <span>Trajectory Forecast</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTabChange('simulator')}
+                className={`py-4 px-4 font-serif font-bold text-sm flex items-center gap-2 border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === 'simulator'
+                    ? 'text-navy border-navy'
+                    : 'text-slate-500 border-transparent hover:text-slate-800'
+                }`}
+                style={{ borderColor: activeTab === 'simulator' ? goalColor : 'transparent' }}
+              >
+                <SlidersHorizontal className="w-4 h-4 text-emerald-600" />
+                <span>Policy Simulator</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTabChange('benchmark')}
+                className={`py-4 px-4 font-serif font-bold text-sm flex items-center gap-2 border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === 'benchmark'
+                    ? 'text-navy border-navy'
+                    : 'text-slate-500 border-transparent hover:text-slate-800'
+                }`}
+                style={{ borderColor: activeTab === 'benchmark' ? goalColor : 'transparent' }}
+              >
+                <Scale className="w-4 h-4 text-purple-600" />
+                <span>Country Benchmarking</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTabChange('datatable')}
+                className={`py-4 px-4 font-serif font-bold text-sm flex items-center gap-2 border-b-2 transition-all flex-shrink-0 ${
+                  activeTab === 'datatable'
+                    ? 'text-navy border-navy'
+                    : 'text-slate-500 border-transparent hover:text-slate-800'
+                }`}
+                style={{ borderColor: activeTab === 'datatable' ? goalColor : 'transparent' }}
+              >
+                <Table className="w-4 h-4 text-teal-600" />
+                <span>Data Table & Series</span>
+              </button>
+            </div>
+          </section>
+
+          {/* ===== TAB CONTENT CONTAINER ===== */}
+          <div className="py-12 px-6 md:px-12 bg-cream min-h-[600px]">
             <div className="max-w-6xl mx-auto">
-              <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
-                <div>
-                  <h2 className="text-2xl md:text-3xl font-serif font-bold text-warm-gray mb-1">Trajectory Forecast</h2>
-                  <p className="text-sm text-slate-500">
-                    Explore data-driven projections toward 2030 for specific indicators and evaluate national progress.
-                  </p>
-                </div>
-              </div>
               
-              {/* Controls */}
-              <div className="bg-white border border-slate-200 p-6 mb-8 rounded-lg shadow-sm">
-                <div className="flex flex-col md:flex-row gap-4 items-end">
-                  <div className="flex-1 space-y-2 w-full">
-                    <label className="text-sm font-medium text-slate-700">Country</label>
-                    <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-                      <SelectTrigger className="w-full h-11 bg-white">
-                        <SelectValue placeholder="Select Country" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {COUNTRIES.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+              {/* TAB 1: TRAJECTORY FORECAST */}
+              {activeTab === 'forecast' && (
+                <div className="space-y-8 animate-in fade-in duration-300">
+                  <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                      <h3 className="text-2xl md:text-3xl font-serif font-bold text-warm-gray mb-1">
+                        National Trajectory Forecast
+                      </h3>
+                      <p className="text-sm text-slate-500">
+                        Explore data-driven projections toward 2030 for specific indicators and evaluate national progress.
+                      </p>
+                    </div>
                   </div>
                   
-                  <div className="flex-1 space-y-2 w-full">
-                    <label className="text-sm font-medium text-slate-700">SDG Target</label>
-                    <Select value={selectedTarget} onValueChange={setSelectedTarget}>
-                      <SelectTrigger className="w-full h-11 bg-white">
-                        <SelectValue placeholder="Select Target" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {goalTargets.map(t => {
-                          const targetInfo = getTargetDetails(t.code, goalNum);
-                          return <TargetSelectItem key={t.code} targetCode={t.code} targetTitle={targetInfo.title} />;
-                        })}
-                      </SelectContent>
-                    </Select>
+                  {/* Controls */}
+                  <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm">
+                    <div className="flex flex-col md:flex-row gap-4 items-end">
+                      <div className="flex-1 space-y-2 w-full">
+                        <label className="text-sm font-medium text-slate-700">Country</label>
+                        <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+                          <SelectTrigger className="w-full h-11 bg-white">
+                            <SelectValue placeholder="Select Country" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {COUNTRIES.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="flex-1 space-y-2 w-full">
+                        <label className="text-sm font-medium text-slate-700">SDG Target</label>
+                        <Select value={selectedTarget} onValueChange={setSelectedTarget}>
+                          <SelectTrigger className="w-full h-11 bg-white">
+                            <SelectValue placeholder="Select Target" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {goalTargets.map(t => {
+                              const targetDetail = getTargetDetails(t.code, goalNum);
+                              return <TargetSelectItem key={t.code} targetCode={t.code} targetTitle={targetDetail.title} />;
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="w-full md:w-auto flex gap-2">
+                        <Button 
+                          onClick={() => navigate(`/country/${selectedCountry}`)} 
+                          variant="outline"
+                          className="w-full md:w-auto h-11 border-slate-200 text-slate-600 bg-white hover:bg-slate-50"
+                        >
+                          View Profile
+                        </Button>
+                        <Button 
+                          onClick={handleGenerate} 
+                          disabled={loading}
+                          className="w-full md:w-auto h-11 bg-navy text-white hover:bg-slate-800"
+                          size="lg"
+                        >
+                          {loading ? (
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="animate-spin w-4 h-4" />
+                              Generating...
+                            </span>
+                          ) : "Generate Forecast"}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="w-full md:w-auto flex gap-2">
-                    <Button 
-                      onClick={() => navigate(`/country/${selectedCountry}`)} 
-                      variant="outline"
-                      className="w-full md:w-auto h-11 border-slate-200 text-slate-600 bg-white hover:bg-slate-50"
-                    >
-                      View Profile
-                    </Button>
-                    <Button 
-                      onClick={handleGenerate} 
-                      disabled={loading}
-                      className="w-full md:w-auto h-11"
-                      size="lg"
-                    >
-                      {loading ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 className="animate-spin w-4 h-4" />
-                          Generating...
-                        </span>
-                      ) : "Generate Forecast"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Target Context & Goal Impact Description */}
-              {(() => {
-                const targetInfo = getTargetDetails(selectedTarget, goalNum);
-                return (
-                  <div key={selectedTarget} className="bg-white border border-slate-200 p-5 mb-8 rounded-lg shadow-sm">
+                  {/* Target Context & Goal Impact Description */}
+                  <div key={selectedTarget} className="bg-white border border-slate-200 p-5 rounded-xl shadow-sm">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3 mb-3">
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -553,46 +652,68 @@ export default function GoalPage() {
                       {targetInfo.impactOnGoal}
                     </p>
                   </div>
-                );
-              })()}
 
-              {/* Loading */}
-              {loading && (
-                <>
-                  <SplashScreenOverlay message="Predicting 2030 Trajectory..." />
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-lg">
-                      <Skeleton className="h-8 w-32 mb-4" />
-                      <Skeleton className="h-[350px] w-full" />
-                    </div>
-                    <div className="space-y-6">
-                      <div className="bg-white border border-slate-200 p-6 rounded-lg"><Skeleton className="h-32 w-full" /></div>
-                      <div className="bg-white border border-slate-200 p-6 rounded-lg"><Skeleton className="h-48 w-full" /></div>
-                    </div>
-                  </div>
-                </>
-              )}
+                  {/* Loading */}
+                  {loading && (
+                    <>
+                      <SplashScreenOverlay message="Predicting 2030 Trajectory..." />
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-xl">
+                          <Skeleton className="h-8 w-32 mb-4" />
+                          <Skeleton className="h-[350px] w-full" />
+                        </div>
+                        <div className="space-y-6">
+                          <div className="bg-white border border-slate-200 p-6 rounded-xl"><Skeleton className="h-32 w-full" /></div>
+                          <div className="bg-white border border-slate-200 p-6 rounded-xl"><Skeleton className="h-48 w-full" /></div>
+                        </div>
+                      </div>
+                    </>
+                  )}
 
-              {/* Results */}
-              {!loading && dashboardData && !dashboardData.error && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Chart */}
-                  {(() => {
-                    const targetInfo = getTargetDetails(selectedTarget, goalNum);
-                    return (
-                      <div id="trajectory-chart-container" className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-lg shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+                  {/* Results */}
+                  {!loading && dashboardData && !dashboardData.error && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      {/* Chart */}
+                      <div id="trajectory-chart-container" className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-xl shadow-sm">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-slate-100 gap-2">
                           <div>
-                            <h3 className="text-lg font-serif font-semibold text-warm-gray">
-                              Trajectory Forecast (2015–2030)
-                            </h3>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-lg font-serif font-semibold text-warm-gray">
+                                Trajectory Forecast (2015–2030)
+                              </h3>
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                Y-Axis: {targetInfo.unit}
+                              </span>
+                            </div>
                             <p className="text-xs text-slate-500 mt-0.5">
-                              Historical actuals with statistical time-series regression projection.
+                              Historical actuals with statistical time-series regression projection for {countryName}.
                             </p>
                           </div>
-                          <Badge variant={getBadgeVariant(dashboardData.status)} className="px-3 py-1.5 text-sm font-semibold">
-                            {dashboardData.status}
-                          </Badge>
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {(() => {
+                              const pred2030 = dashboardData?.chart_data?.find(d => d.Year === 2030)?.predictedValue;
+                              const bVal = targetInfo.benchmarkValue;
+                              if (bVal !== null && pred2030 !== null && pred2030 !== undefined) {
+                                const isLower = targetInfo.polarity === 'lower_is_better';
+                                const met = isLower ? pred2030 <= bVal : pred2030 >= bVal;
+                                const gap = Math.abs(pred2030 - bVal);
+                                return (
+                                  <span className={`text-xs px-2.5 py-1 rounded-full font-semibold border ${
+                                    met 
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                                  }`}>
+                                    {met ? '✓ Target Milestone Met' : `Gap to Benchmark: ${gap.toFixed(1)} ${targetInfo.unit}`}
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
+                            <Badge variant={getBadgeVariant(dashboardData.status)} className="px-3 py-1.5 text-sm font-semibold">
+                              {dashboardData.status}
+                            </Badge>
+                          </div>
                         </div>
                         
                         <div className="h-[360px] w-full" ref={chartRef}>
@@ -618,10 +739,31 @@ export default function GoalPage() {
                                 ]}
                                 width={75}
                               />
-                              <Tooltip content={<CustomTooltip />} />
+                              <Tooltip content={<CustomTooltip unit={targetInfo.unit} />} />
                               <Legend verticalAlign="top" height={36} iconType="circle" />
-                              <Line name="Historical Data" type="monotone" dataKey="actualValue" stroke={goalColor} strokeWidth={2.5} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: goalColor, strokeWidth: 2 }} />
-                              <Line name="Statistical Trend Forecast (2030)" type="monotone" dataKey="predictedValue" stroke="#8b5cf6" strokeWidth={2.5} strokeDasharray="5 5" dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: '#7c3aed', strokeWidth: 2 }} />
+                              
+                              {/* Historical Solid Line */}
+                              <Line name="Historical Data" type="monotone" dataKey="actualValue" stroke={goalColor} strokeWidth={2.5} connectNulls={true} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: goalColor, strokeWidth: 2 }} />
+                              
+                              {/* 2030 Regression Forecast Dashed Line */}
+                              <Line name="Statistical Trend Forecast (2030)" type="monotone" dataKey="predictedValue" stroke="#8b5cf6" strokeWidth={2.5} strokeDasharray="5 5" connectNulls={true} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: '#7c3aed', strokeWidth: 2 }} />
+                              
+                              {/* Official UN 2030 Target Reference Line */}
+                              {targetInfo.benchmarkValue !== null && (
+                                <ReferenceLine 
+                                  y={targetInfo.benchmarkValue} 
+                                  stroke="#e11d48" 
+                                  strokeDasharray="4 4" 
+                                  strokeWidth={1.75}
+                                  label={{ 
+                                    value: targetInfo.benchmarkLabel || 'UN 2030 Benchmark', 
+                                    fill: '#e11d48', 
+                                    fontSize: 10, 
+                                    fontWeight: 700, 
+                                    position: 'insideTopRight' 
+                                  }} 
+                                />
+                              )}
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
@@ -631,7 +773,7 @@ export default function GoalPage() {
                           <Info className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
                           <div className="leading-relaxed">
                             <strong className="text-slate-800">How is this forecast generated? </strong>
-                            This trajectory uses statistical linear regression on historical UN and World Bank indicator data (2015–2025). It models current velocity and projects expected 2030 outcomes assuming existing policy environments and investment rates continue without disruption.
+                            This trajectory uses statistical linear regression on historical UN and World Bank indicator data (2015–2025). It models current velocity and projects expected 2030 outcomes assuming existing policy environments continue.
                           </div>
                         </div>
 
@@ -646,7 +788,7 @@ export default function GoalPage() {
                             chartId="trajectory-chart-container" 
                             context={{
                               countryCode: selectedCountry,
-                              countryName: COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry,
+                              countryName: countryName,
                               selectedTarget: selectedTarget,
                               baselineValue: dashboardData?.chart_data?.find(d => d.Year === 2015)?.actualValue,
                               projectedValue2030: dashboardData?.chart_data?.find(d => d.Year === 2030)?.predictedValue,
@@ -655,70 +797,104 @@ export default function GoalPage() {
                           />
                         </div>
                       </div>
-                    );
-                  })()}
 
-                  {/* Context + Layman Insight */}
-                  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150 fill-mode-both">
-                    <div className="bg-white border border-slate-200 p-6 rounded-lg shadow-sm">
-                      <h4 className="text-sm font-semibold text-warm-gray flex items-center gap-2 mb-3">
-                        <BookOpen className="w-4 h-4 text-slate-400" /> <span>Target Overview</span>
-                      </h4>
-                      <p className="text-sm text-slate-600 leading-relaxed">
-                        <strong className="font-semibold text-slate-800">SDG Context: </strong>
-                        {getSDGContext(selectedTarget)}
-                      </p>
-                    </div>
+                      {/* Context + Layman Insight */}
+                      <div className="space-y-6">
+                        <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm">
+                          <h4 className="text-sm font-semibold text-warm-gray flex items-center gap-2 mb-3">
+                            <BookOpen className="w-4 h-4 text-slate-400" /> <span>Target Overview</span>
+                          </h4>
+                          <p className="text-sm text-slate-600 leading-relaxed">
+                            <strong className="font-semibold text-slate-800">SDG Context: </strong>
+                            {getSDGContext(selectedTarget)}
+                          </p>
+                        </div>
 
-                    <div className="bg-white border border-slate-200 p-6 rounded-lg shadow-sm relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-1.5 h-full" style={{ backgroundColor: goalColor }} />
-                      <h4 className="text-sm font-semibold text-warm-gray flex items-center gap-2 mb-3 pl-2">
-                        <Sparkles className="w-4 h-4 text-purple-600" /> <span>AI Trajectory Insight</span>
-                      </h4>
-                      <p className="text-sm text-slate-700 leading-relaxed font-medium pl-2">
-                        {generateDynamicLaymanInsight({
-                          countryName: COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry,
-                          goalNumber: goalNum,
-                          goalName: goal.title,
-                          targetCode: selectedTarget,
-                          status: dashboardData.status,
-                          chartData: dashboardData.chart_data,
-                        })}
-                      </p>
+                        <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-1.5 h-full" style={{ backgroundColor: goalColor }} />
+                          <div className="flex items-center justify-between mb-3 pl-2">
+                            <h4 className="text-sm font-semibold text-warm-gray flex items-center gap-2">
+                              <Sparkles className="w-4 h-4 text-purple-600" /> <span>AI Trajectory Diagnosis</span>
+                            </h4>
+                            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                              Automated Insight
+                            </span>
+                          </div>
+                          
+                          <p className="text-sm text-slate-700 leading-relaxed font-medium pl-2 mb-3">
+                            {generateDynamicLaymanInsight({
+                              countryName: countryName,
+                              goalNumber: goalNum,
+                              goalName: goal.title,
+                              targetCode: selectedTarget,
+                              status: dashboardData.status,
+                              chartData: dashboardData.chart_data,
+                            })}
+                          </p>
+
+                          {dashboardData.ai_narrative && dashboardData.ai_narrative.trim().length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-slate-100 pl-2">
+                              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-1.5">
+                                <Bot className="w-3.5 h-3.5 text-indigo-500" />
+                                <span>Policy Brief Summary</span>
+                              </div>
+                              <p className="text-xs text-slate-600 leading-relaxed italic bg-slate-50 p-3 rounded-lg border border-slate-200/60">
+                                "{dashboardData.ai_narrative}"
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* Error State */}
+                  {!loading && dashboardData && dashboardData.error && (
+                    <div className="bg-red-50 border border-red-200 p-6 rounded-xl max-w-3xl">
+                      <h3 className="font-semibold text-red-700 mb-2">Failed to load forecast data</h3>
+                      <p className="text-red-600 text-sm">{dashboardData.ai_narrative}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Error */}
-              {!loading && dashboardData && dashboardData.error && (
-                <div className="bg-red-50 border border-red-200 p-6 rounded-lg max-w-3xl">
-                  <h3 className="font-semibold text-red-700 mb-2">Failed to load forecast data</h3>
-                  <p className="text-red-600 text-sm">{dashboardData.ai_narrative}</p>
+              {/* TAB 2: WHAT-IF POLICY SIMULATOR */}
+              {activeTab === 'simulator' && (
+                <div className="animate-in fade-in duration-300">
+                  <PolicySimulator goalNumber={goalNum} isEmbedded={true} />
                 </div>
               )}
-            </div>
-          </section>
 
-          {/* Policy Simulator Section */}
-          <section className="py-12 px-6 md:px-12 bg-white border-b border-slate-200">
-            <div className="max-w-6xl mx-auto">
-              <PolicySimulator goalNumber={goalNum} />
-            </div>
-          </section>
+              {/* TAB 3: COUNTRY BENCHMARKING */}
+              {activeTab === 'benchmark' && (
+                <div className="animate-in fade-in duration-300">
+                  <CountryComparison goalNumber={goalNum} isEmbedded={true} />
+                </div>
+              )}
 
-          {/* Country Comparison Section */}
-          <section className="py-12 px-6 md:px-12 bg-cream border-b border-slate-200">
-            <div className="max-w-6xl mx-auto">
-              <CountryComparison goalNumber={goalNum} />
+              {/* TAB 4: DATA TABLE & TIME SERIES */}
+              {activeTab === 'datatable' && (
+                <div className="animate-in fade-in duration-300">
+                  <DataTableTab
+                    dashboardData={dashboardData}
+                    countryName={countryName}
+                    countryCode={selectedCountry}
+                    targetInfo={targetInfo}
+                    goalColor={goalColor}
+                    onGenerateForecast={handleGenerate}
+                    loading={loading}
+                  />
+                </div>
+              )}
+
             </div>
-          </section>
+          </div>
 
           {/* Footer */}
-          <footer className="border-t border-slate-200 bg-cream relative z-10">
-            <div className="max-w-6xl mx-auto px-6 py-8 text-center text-sm text-slate-500">
+          <footer className="border-t border-slate-200 bg-cream relative z-10 py-8 text-center text-sm text-slate-500">
+            <div className="max-w-6xl mx-auto px-6 space-y-1">
               <p>© 2026 SDG Trajectory — Academic Project Prototype</p>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="text-xs text-slate-400">
                 This tool is for educational and research purposes. Data sourced from the United Nations SDG API and Our World in Data.
               </p>
             </div>
@@ -729,8 +905,13 @@ export default function GoalPage() {
       <CopilotDrawer 
         context={{
           countryCode: selectedCountry,
-          countryName: COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry,
+          countryName: countryName,
           selectedTarget: selectedTarget,
+          targetName: targetInfo?.name,
+          unit: targetInfo?.unit,
+          polarity: targetInfo?.polarity,
+          benchmarkValue: targetInfo?.benchmarkValue,
+          benchmarkLabel: targetInfo?.benchmarkLabel,
           baselineValue: dashboardData?.chart_data?.find(d => d.Year === 2015)?.actualValue,
           projectedValue2030: dashboardData?.chart_data?.find(d => d.Year === 2030)?.predictedValue,
           status: dashboardData?.status,
