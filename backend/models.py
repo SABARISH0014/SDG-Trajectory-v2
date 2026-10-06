@@ -62,7 +62,13 @@ async def generate_narrative(stats: dict) -> str:
             )
             response.raise_for_status()
             data = response.json()
-            return data["choices"][0]["message"]["content"].strip()
+            if "choices" in data and isinstance(data["choices"], list) and len(data["choices"]) > 0:
+                choice = data["choices"][0]
+                if "message" in choice and "content" in choice["message"]:
+                    return choice["message"]["content"].strip()
+            
+            logger.warning(f"Unexpected response structure from OpenRouter in narrative generation: {data}")
+            return fallback_narrative
     except httpx.ReadTimeout:
         logger.error("OpenRouter API call timed out. Falling back.")
         return fallback_narrative

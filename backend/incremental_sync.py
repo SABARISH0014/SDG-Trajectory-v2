@@ -176,7 +176,9 @@ def fetch_ilostat_data() -> pd.DataFrame:
         unique_codes = df['CountryCode'].dropna().unique()
         code_map = {code: standardize_country_code(code) for code in unique_codes}
         df['CountryCode'] = df['CountryCode'].map(code_map)
+        df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
         df = df.dropna(subset=['CountryCode', 'IndicatorValue'])
+        df = df[df['IndicatorValue'].between(0.0, 100.0)]
         
         df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
         df = df[df['Year'].between(2015, 2025)]

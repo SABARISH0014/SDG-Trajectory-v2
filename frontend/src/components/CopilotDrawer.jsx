@@ -2,6 +2,7 @@ import { API_BASE_URL } from '@/config';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Sparkles, Loader2, Bot, User, RotateCcw, HelpCircle } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { Button } from './ui/Button';
 
 export default function CopilotDrawer({ context }) {
@@ -108,18 +109,20 @@ Statistical Context:
       const reply = data.content || '';
 
       // Markdown-to-html conversion for bold, italics, bullets and line breaks
-      const formattedReply = reply
+      const rawHtml = reply
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/^\s*[-*]\s+(.*)$/gm, '• $1')
         .replace(/\n/g, '<br/>');
 
-      setMessages(prev => [...prev, { role: 'assistant', content: formattedReply }]);
+      const sanitizedReply = DOMPurify.sanitize(rawHtml);
+
+      setMessages(prev => [...prev, { role: 'assistant', content: sanitizedReply }]);
     } catch (error) {
       console.error(error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `🚨 Error connecting to the AI service. (${error.message})` 
+        content: `🚨 Error connecting to the AI service. (${DOMPurify.sanitize(error.message)})` 
       }]);
     } finally {
       setIsLoading(false);
@@ -235,7 +238,7 @@ Statistical Context:
                           ? 'bg-indigo-600 text-white rounded-tr-sm shadow-sm' 
                           : 'bg-white border border-slate-200 text-slate-700 rounded-tl-sm shadow-sm'
                       }`}
-                      dangerouslySetInnerHTML={{ __html: msg.content }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }}
                     />
                   </div>
                 ))

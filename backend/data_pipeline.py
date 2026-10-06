@@ -1,13 +1,15 @@
 import pandas as pd
-from database import engine
-from sqlalchemy import text
+import sqlite3
 import glob
 import os
 import requests
 import io
 import logging
+import asyncio
 import pycountry
 import pycountry_convert as pc
+import libsql_client
+from database import clear_db_cache, get_turso_credentials
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -218,7 +220,9 @@ def fetch_ilostat_data() -> pd.DataFrame:
         unique_codes = df['CountryCode'].dropna().unique()
         code_map = {code: standardize_country_code(code) for code in unique_codes}
         df['CountryCode'] = df['CountryCode'].map(code_map)
+        df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
         df = df.dropna(subset=['CountryCode', 'IndicatorValue'])
+        df = df[df['IndicatorValue'].between(0.0, 100.0)]
         
         df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
         df = df[df['Year'].between(2015, 2025)]
@@ -482,20 +486,23 @@ def build_master_grid_and_load(all_dfs: list, original_dfs: list):
     
     logger.info("Starting zero-downtime database load...")
     try:
-        final_master_df.to_sql("sdg_global_data_staging", con=engine, if_exists="replace", index=False)
-        with engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS sdg_global_data_old;"))
-            table_exists = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='sdg_global_data';")).fetchone()
+        db_path = os.path.join(os.path.dirname(__file__), "sdg_database.db")
+        with sqlite3.connect(db_path) as conn:
+            final_master_df.to_sql("sdg_global_data_staging", con=conn, if_exists="replace", index=False)
+            cursor = conn.cursor()
+            cursor.execute("DROP TABLE IF EXISTS sdg_global_data_old;")
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sdg_global_data';")
+            table_exists = cursor.fetchone()
             if table_exists:
-                conn.execute(text("ALTER TABLE sdg_global_data RENAME TO sdg_global_data_old;"))
-            conn.execute(text("ALTER TABLE sdg_global_data_staging RENAME TO sdg_global_data;"))
-            conn.execute(text("DROP TABLE IF EXISTS sdg_global_data_old;"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_country_target_year ON sdg_global_data (CountryCode, SDG_Target, Year);"))
-        logger.info("Database load completed successfully.")
+                cursor.execute("ALTER TABLE sdg_global_data RENAME TO sdg_global_data_old;")
+            cursor.execute("ALTER TABLE sdg_global_data_staging RENAME TO sdg_global_data;")
+            cursor.execute("DROP TABLE IF EXISTS sdg_global_data_old;")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_country_target_year ON sdg_global_data (CountryCode, SDG_Target, Year);")
+            conn.commit()
+        logger.info(f"Local database load completed successfully ({db_path}).")
         
         # Trigger cache clearing
         try:
-            from database import clear_db_cache
             clear_db_cache()
             logger.info("Cleared database query cache.")
         except Exception as e:

@@ -22,4 +22,19 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: ['dompurify', 'recharts', 'framer-motion', 'axios', 'clsx', 'tailwind-merge'],
+  },
+  build: {
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-charts': ['recharts'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-pdf': ['jspdf', 'html2canvas'],
+        }
+      }
+    }
+  }
 })

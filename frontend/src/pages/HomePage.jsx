@@ -12,7 +12,7 @@ import Navbar from '../components/Navbar';
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const [hoveredGoal, setHoveredGoal] = useState(null);
+  const [activeGoal, setActiveGoal] = useState(1);
   const [globeMarkers, setGlobeMarkers] = useState([]);
   const [selectedCountry, setSelectedCountry] = useState('');
   const [loading, setLoading] = useState(true);
@@ -130,8 +130,13 @@ export default function HomePage() {
                 key={num}
                 to={`/goal/${num}`}
                 className="flex-1 h-5 md:h-6 transition-all duration-200 hover:h-8 rounded-sm"
-                style={{ backgroundColor: sdgColors[num] }}
+                style={{
+                  backgroundColor: sdgColors[num],
+                  opacity: activeGoal === num ? 1 : 0.85,
+                  transform: activeGoal === num ? 'scaleY(1.2)' : 'scaleY(1)'
+                }}
                 title={`Goal ${num}: ${sdgGoalsContent[num - 1]?.title}`}
+                onMouseEnter={() => setActiveGoal(num)}
               />
             ))}
           </div>
@@ -150,8 +155,8 @@ export default function HomePage() {
           <div className="flex justify-center mb-10">
             <GlobeView
               markers={globeMarkers}
-              goalNumber={hoveredGoal}
-              highlightColor={hoveredGoal ? sdgColors[hoveredGoal] : '#3b82f6'}
+              goalNumber={activeGoal}
+              highlightColor={sdgColors[activeGoal] || '#3b82f6'}
               compact={true}
               size={560}
               showRing={true}
@@ -242,16 +247,15 @@ export default function HomePage() {
                   key={goal.goalNumber}
                   to={`/goal/${goal.goalNumber}`}
                   className="group flex items-start gap-5 py-4 border-b border-slate-200 hover:bg-white/60 transition-colors px-3 -mx-3 rounded-sm"
-                  onMouseEnter={() => setHoveredGoal(goal.goalNumber)}
-                  onMouseLeave={() => setHoveredGoal(null)}
+                  onMouseEnter={() => setActiveGoal(goal.goalNumber)}
                 >
                   <div className="flex-shrink-0 w-12 text-center">
                     <span
                       className="inline-block text-2xl font-bold text-warm-gray pb-1 transition-all duration-150 group-hover:text-white group-hover:px-2 group-hover:py-0.5 rounded"
                       style={{
                         borderBottom: `3px solid ${sdgColors[goal.goalNumber]}`,
-                        backgroundColor: hoveredGoal === goal.goalNumber ? sdgColors[goal.goalNumber] : 'transparent',
-                        color: hoveredGoal === goal.goalNumber ? '#fff' : undefined,
+                        backgroundColor: activeGoal === goal.goalNumber ? sdgColors[goal.goalNumber] : 'transparent',
+                        color: activeGoal === goal.goalNumber ? '#fff' : undefined,
                       }}
                     >
                       {goal.goalNumber}
@@ -277,16 +281,15 @@ export default function HomePage() {
                   key={goal.goalNumber}
                   to={`/goal/${goal.goalNumber}`}
                   className="group flex items-start gap-5 py-4 border-b border-slate-200 hover:bg-white/60 transition-colors px-3 -mx-3 rounded-sm"
-                  onMouseEnter={() => setHoveredGoal(goal.goalNumber)}
-                  onMouseLeave={() => setHoveredGoal(null)}
+                  onMouseEnter={() => setActiveGoal(goal.goalNumber)}
                 >
                   <div className="flex-shrink-0 w-12 text-center">
                     <span
                       className="inline-block text-2xl font-bold text-warm-gray pb-1 transition-all duration-150 group-hover:text-white group-hover:px-2 group-hover:py-0.5 rounded"
                       style={{
                         borderBottom: `3px solid ${sdgColors[goal.goalNumber]}`,
-                        backgroundColor: hoveredGoal === goal.goalNumber ? sdgColors[goal.goalNumber] : 'transparent',
-                        color: hoveredGoal === goal.goalNumber ? '#fff' : undefined,
+                        backgroundColor: activeGoal === goal.goalNumber ? sdgColors[goal.goalNumber] : 'transparent',
+                        color: activeGoal === goal.goalNumber ? '#fff' : undefined,
                       }}
                     >
                       {goal.goalNumber}

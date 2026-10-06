@@ -14,8 +14,11 @@ def filter_outliers(df: pd.DataFrame, contamination_val: float = 0.1) -> pd.Data
     Uses IsolationForest to detect and remove anomalous data points.
     Safety feature: Ensures the most recent chronological data point is never removed
     so we don't skew the endpoint of the trajectory.
-    Skips if real data points < 4.
+    Skips if real data points < 4 or contamination_val <= 0.
     """
+    if contamination_val <= 0.0:
+        return df
+
     real_mask = ~df.get('is_imputed', pd.Series(False, index=df.index)).astype(bool)
     if 'is_regional_estimate' in df.columns:
         real_mask = real_mask & ~df['is_regional_estimate'].astype(bool)
@@ -57,11 +60,23 @@ def filter_outliers(df: pd.DataFrame, contamination_val: float = 0.1) -> pd.Data
 def classify_status(baseline_value: float, projected_value: float, sdg_target: str) -> str:
     """
     Classifies the progress status based on baseline vs projection and target polarity.
+    Handles zero and near-zero baselines safely.
     """
+    if baseline_value is None or projected_value is None or np.isnan(baseline_value) or np.isnan(projected_value):
+        return "Unknown"
+
     # Negative polarity targets (lower value is better)
     NEGATIVE_POLARITY_TARGETS = ['1.1', '1.2', '2.1', '3.1', '3.2', '3.4', '3.6', '8.5', '8.7', '13.2', '16.1']
-    
-    if str(sdg_target) in NEGATIVE_POLARITY_TARGETS:
+    is_negative_polarity = str(sdg_target) in NEGATIVE_POLARITY_TARGETS
+
+    # Handle near-zero baseline
+    if abs(baseline_value) < 1e-6:
+        if is_negative_polarity:
+            return "On-track" if projected_value <= 1e-6 else "Off-track"
+        else:
+            return "On-track" if projected_value > 1e-6 else "Off-track"
+
+    if is_negative_polarity:
         if projected_value < baseline_value * 0.95:
             return "On-track"
         elif baseline_value * 0.95 <= projected_value <= baseline_value * 1.05:
@@ -75,6 +90,12 @@ def classify_status(baseline_value: float, projected_value: float, sdg_target: s
             return "At-risk"
         else:
             return "Off-track"
+
+PERCENTAGE_TARGETS = {
+    '1.1', '1.2', '1.3', '2.1', '2.2', '4.1', '4.2', '4.3', '4.4', '4.6', 
+    '5.2', '5.3', '5.5', '6.1', '6.2', '7.1', '7.2', '8.3', '8.5', '8.6', 
+    '8.7', '9.2', '9.3', '9.c', '10.2', '10.4', '11.1', '11.2', '11.6', '16.9'
+}
 
 def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multiplier: float = 1.0, contamination_val: float = 0.1) -> dict:
     """
@@ -91,8 +112,12 @@ def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multipli
 
     df_clean = df.dropna(subset=['IndicatorValue', 'Year']).copy()
     
+    # Filter percentage targets to [0, 100]
+    if str(sdg_target) in PERCENTAGE_TARGETS:
+        df_clean = df_clean[df_clean['IndicatorValue'].between(0.0, 100.0)].copy()
+
     # Sparse Data Bypass (CRITICAL): if length is < 2
-    if len(df.dropna(subset=['IndicatorValue'])) < 2:
+    if len(df_clean.dropna(subset=['IndicatorValue'])) < 2:
         logger.warning(f"Insufficient real data. Triggering sparse data bypass.")
         return {
             "predictions": [],
@@ -167,8 +192,10 @@ def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multipli
             else:
                 pred_val = model.predict([[year]])[0]
                 
-            # Zero-Floor Constraint
+            # Zero-Floor & 100% Upper Cap for percentage targets
             pred_val = max(0.0, float(pred_val))
+            if str(sdg_target) in PERCENTAGE_TARGETS:
+                pred_val = min(100.0, pred_val)
                 
             predictions.append({
                 "Year": year,
@@ -184,6 +211,9 @@ def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multipli
             pred_val = model.predict([[2030]])[0]
         
         pred_val = max(0.0, float(pred_val))
+        if str(sdg_target) in PERCENTAGE_TARGETS:
+            pred_val = min(100.0, pred_val)
+
         predictions.append({
             "Year": 2030,
             "PredictedValue": pred_val

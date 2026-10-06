@@ -39,6 +39,7 @@ import ExportDossierButton from '../components/ExportDossierButton';
 import CopilotDrawer from '../components/CopilotDrawer';
 import SplashScreenOverlay from '../components/SplashScreenOverlay';
 import DataTableTab from '../components/tabs/DataTableTab';
+import html2canvas from 'html2canvas';
 
 import {
   LineChart,
@@ -196,13 +197,13 @@ export default function GoalPage() {
   }, [goalNum, goalTargets, selectedTarget, urlTarget]);
   
   const [loading, setLoading] = useState(false);
+  const [isSavingChart, setIsSavingChart] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
   const chartRef = useRef(null);
 
   const handleGenerate = async () => {
     setLoading(true);
     setDashboardData(null);
-    await new Promise(resolve => setTimeout(resolve, 1000));
 
     try {
       const response = await axios.get(`${API_BASE_URL}/api/predict`, {
@@ -296,37 +297,35 @@ export default function GoalPage() {
     document.body.removeChild(a);
   };
 
-  const handleSaveChart = () => {
-    if (!chartRef.current) return;
-    const svgElement = chartRef.current.querySelector('svg');
-    if (!svgElement) return;
-    
-    const serializer = new XMLSerializer();
-    let source = serializer.serializeToString(svgElement);
-    if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
-      source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
-    }
-    source = source.replace('<svg ', '<svg style="font-family: sans-serif;" ');
-
-    const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-    const url = window.URL.createObjectURL(svgBlob);
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = svgElement.clientWidth || 800;
-      canvas.height = svgElement.clientHeight || 400;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-      window.URL.revokeObjectURL(url);
+  const handleSaveChart = async () => {
+    const chartContainer = document.getElementById('trajectory-chart-container') || chartRef.current;
+    if (!chartContainer) return;
+    setIsSavingChart(true);
+    try {
+      const originalBg = chartContainer.style.backgroundColor;
+      chartContainer.style.backgroundColor = '#ffffff';
+      const canvas = await html2canvas(chartContainer, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        ignoreElements: (element) => element.classList && element.classList.contains('pdf-hide')
+      });
+      chartContainer.style.backgroundColor = originalBg;
+      
       const imgUrl = canvas.toDataURL('image/png');
       const a = document.createElement('a');
-      a.download = `forecast_${selectedCountry}_${selectedTarget}.png`;
+      a.download = `SDG_Forecast_${selectedCountry}_Target_${selectedTarget}.png`;
       a.href = imgUrl;
+      document.body.appendChild(a);
       a.click();
-    };
-    img.src = url;
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error("Save chart failed:", err);
+      alert("Failed to save chart. Please try again.");
+    } finally {
+      setIsSavingChart(false);
+    }
   };
 
   if (!goal) {
@@ -478,15 +477,15 @@ export default function GoalPage() {
 
               {/* Right: Rotating Globe */}
               <div className="lg:w-[48%] flex justify-center items-center lg:sticky lg:top-20 py-4">
-                <div className="relative flex justify-center items-center rounded-full shadow-[0_0_60px_-15px_rgba(59,130,246,0.3)] bg-gradient-to-b from-transparent to-blue-50/20 p-4">
-                  <GlobeView
-                    goalNumber={goalNum}
-                    highlightColor="#ffffff"
-                    compact={true}
-                    size={520}
-                    showRing={true}
-                  />
-                </div>
+                <GlobeView
+                  goalNumber={goalNum}
+                  sdgTarget={selectedTarget}
+                  onTargetChange={setSelectedTarget}
+                  highlightColor="#ffffff"
+                  compact={true}
+                  size={520}
+                  showRing={true}
+                />
               </div>
             </div>
           </section>
@@ -781,18 +780,43 @@ export default function GoalPage() {
                           <Button variant="outline" className="text-slate-600 bg-white hover:bg-slate-50 border-slate-200 h-9 px-4 transition-all" onClick={handleExportCSV}>
                             <FileSpreadsheet className="w-4 h-4 mr-2" /> <span className="text-sm font-medium">Export CSV</span>
                           </Button>
-                          <Button variant="outline" className="text-slate-600 bg-white hover:bg-slate-50 border-slate-200 h-9 px-4 transition-all" onClick={handleSaveChart}>
-                            <Download className="w-4 h-4 mr-2" /> <span className="text-sm font-medium">Save Chart</span>
+                          <Button 
+                            variant="outline" 
+                            disabled={isSavingChart}
+                            className="text-slate-600 bg-white hover:bg-slate-50 border-slate-200 h-9 px-4 transition-all" 
+                            onClick={handleSaveChart}
+                          >
+                            {isSavingChart ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                            <span className="text-sm font-medium">{isSavingChart ? 'Saving...' : 'Save Chart'}</span>
                           </Button>
                           <ExportDossierButton 
                             chartId="trajectory-chart-container" 
                             context={{
                               countryCode: selectedCountry,
                               countryName: countryName,
+                              goalNumber: goalNum,
+                              goalTitle: goal?.title || `Goal ${goalNum}`,
                               selectedTarget: selectedTarget,
-                              baselineValue: dashboardData?.chart_data?.find(d => d.Year === 2015)?.actualValue,
+                              targetTitle: targetInfo.title,
+                              indicatorName: targetInfo.indicatorName,
+                              unit: targetInfo.unit,
+                              polarity: targetInfo.polarity,
+                              benchmarkValue: targetInfo.benchmarkValue,
+                              benchmarkLabel: targetInfo.benchmarkLabel,
+                              baselineValue: dashboardData?.chart_data?.find(d => d.actualValue !== null && d.actualValue !== undefined)?.actualValue,
                               projectedValue2030: dashboardData?.chart_data?.find(d => d.Year === 2030)?.predictedValue,
-                              status: dashboardData?.status,
+                              status: dashboardData?.status || 'Unknown',
+                              aiNarrative: generateDynamicLaymanInsight({
+                                countryName: countryName,
+                                goalNumber: goalNum,
+                                goalName: goal.title,
+                                targetCode: selectedTarget,
+                                status: dashboardData?.status,
+                                chartData: dashboardData?.chart_data,
+                              }),
+                              policyBriefSummary: dashboardData?.ai_narrative || '',
+                              sdgContext: getSDGContext(selectedTarget),
+                              goalColor: goalColor,
                             }} 
                           />
                         </div>
