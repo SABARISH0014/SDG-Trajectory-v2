@@ -345,7 +345,7 @@ export default function GoalPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-cream">
-      <Navbar />
+      <Navbar activeGoal={goalNum} />
 
       {/* ===== BREADCRUMB BAR ===== */}
       <div className="bg-slate-100 border-b border-slate-200 py-2.5 px-4 sm:px-6 lg:px-8">

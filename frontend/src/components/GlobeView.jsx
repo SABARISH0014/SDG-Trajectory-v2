@@ -475,33 +475,37 @@ export default function GlobeView({
       {showTelemetry && goalStatusData && (
         <div className="w-[95%] max-w-sm sm:max-w-md mt-4 transition-all duration-300 drop-shadow-xl z-20">
           <div className="bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-2xl p-2.5 sm:p-3 shadow-[0_10px_30px_rgba(0,0,0,0.5)] text-white">
-            {/* Header: Title + Target indicator dropdown */}
-            <div className="flex items-center justify-between text-xs mb-2 px-0.5 gap-2">
-              <div className="flex items-center gap-2 truncate">
+            {/* Top Row: Selected Goal Title & Context */}
+            <div className="flex items-center justify-between text-xs pb-1.5 mb-2 border-b border-white/10 px-0.5">
+              <div className="flex items-center gap-2">
                 <span
                   className="w-2.5 h-2.5 rounded-full ring-2 ring-white/30 animate-pulse flex-shrink-0"
                   style={{ backgroundColor: activeGoalColor }}
                 />
-                <span className="font-semibold text-slate-200 truncate text-[11px] sm:text-xs">
-                  Global Status (Goal {activeGoal} · {SDG_SHORT_NAMES[activeGoal] || 'Goal ' + activeGoal})
+                <span className="font-bold text-white text-xs sm:text-sm tracking-tight">
+                  Goal {activeGoal}: {SDG_SHORT_NAMES[activeGoal] || sdgGoalsContent[activeGoal - 1]?.title || `Goal ${activeGoal}`}
                 </span>
               </div>
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+                Global Status
+              </span>
+            </div>
 
-              <div className="relative inline-flex items-center flex-shrink-0">
-                <select
-                  value={activeTarget}
-                  onChange={(e) => handleTargetSelect(e.target.value)}
-                  className="appearance-none bg-white/10 hover:bg-white/20 focus:bg-slate-800 text-[10px] font-mono font-bold text-slate-200 pl-2 pr-5 py-1 rounded-md border border-white/20 focus:outline-none focus:ring-1 focus:ring-sky-400 cursor-pointer transition-all"
-                  title="Switch Target"
-                >
-                  {availableTargets.map(t => (
-                    <option key={t.code} value={t.code} className="bg-slate-900 text-white py-1">
-                      Target {t.code} — {t.title}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3 h-3 text-slate-400 absolute right-1.5 pointer-events-none" />
-              </div>
+            {/* Target selector dropdown (Full Width) */}
+            <div className="relative w-full mb-2.5">
+              <select
+                value={activeTarget}
+                onChange={(e) => handleTargetSelect(e.target.value)}
+                className="w-full appearance-none bg-white/10 hover:bg-white/15 focus:bg-slate-800 text-[11px] font-medium text-slate-200 pl-3 pr-8 py-1.5 rounded-lg border border-white/15 focus:outline-none focus:ring-1 focus:ring-sky-400 cursor-pointer transition-all truncate shadow-inner"
+                title="Switch Target"
+              >
+                {availableTargets.map(t => (
+                  <option key={t.code} value={t.code} className="bg-slate-900 text-white py-1.5">
+                    Target {t.code} — {t.title}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
             {/* Distribution Bar */}

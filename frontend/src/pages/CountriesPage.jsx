@@ -15,8 +15,11 @@ import Navbar from '../components/Navbar';
 import { COUNTRIES } from '../lib/constants';
 import { Button } from '../components/ui/Button';
 
+import GlobeView from '../components/GlobeView';
+
 export default function CountriesPage() {
   const navigate = useNavigate();
+  const [activeGoal, setActiveGoal] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLetter, setSelectedLetter] = useState('ALL');
 
@@ -39,12 +42,13 @@ export default function CountriesPage() {
 
   return (
     <div className="min-h-screen bg-cream text-warm-gray font-sans flex flex-col">
-      <Navbar />
+      <Navbar activeGoal={activeGoal} onGoalChange={setActiveGoal} />
 
-      {/* Hero Banner */}
-      <section className="bg-navy text-white py-14 px-6 md:px-12 border-b border-white/10 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-8 relative z-10">
-          <div>
+      {/* Hero Banner with Globe & Goal Status */}
+      <section className="bg-navy text-white py-12 px-6 md:px-12 border-b border-white/10 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-10 relative z-10">
+          {/* Left: Text & Key Stats */}
+          <div className="lg:w-[50%] flex-shrink-0">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-400/20 text-teal-300 text-xs font-semibold mb-4">
               <Globe2 className="w-3.5 h-3.5" />
               <span>National SDG Intelligence Directory</span>
@@ -52,24 +56,42 @@ export default function CountriesPage() {
             <h1 className="text-3xl md:text-5xl font-serif font-bold text-white mb-3">
               Explore Countries & Territories
             </h1>
-            <p className="text-slate-300 max-w-2xl text-base leading-relaxed">
+            <p className="text-slate-300 max-w-xl text-sm md:text-base leading-relaxed mb-6">
               Explore national SDG profiles, trajectory projections toward 2030, and policy scenarios for 250+ nations and territories across all 17 Sustainable Development Goals.
             </p>
+
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-3.5 text-center min-w-[110px]">
+                <span className="block text-2xl md:text-3xl font-bold text-teal-400 font-serif">{COUNTRIES.length}</span>
+                <span className="text-xs text-slate-400">Total Territories</span>
+              </div>
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-3.5 text-center min-w-[110px]">
+                <span className="block text-2xl md:text-3xl font-bold text-purple-400 font-serif">17</span>
+                <span className="text-xs text-slate-400">SDGs Tracked</span>
+              </div>
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-3.5 text-center min-w-[110px]">
+                <span className="block text-2xl md:text-3xl font-bold text-emerald-400 font-serif">2030</span>
+                <span className="text-xs text-slate-400">Target Year</span>
+              </div>
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-300">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+              <span>Hover or click the color strip in the header to switch Goal {activeGoal} on the 3D globe</span>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4 text-center min-w-[120px]">
-              <span className="block text-3xl font-bold text-teal-400 font-serif">{COUNTRIES.length}</span>
-              <span className="text-xs text-slate-400">Total Territories</span>
-            </div>
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4 text-center min-w-[120px]">
-              <span className="block text-3xl font-bold text-purple-400 font-serif">17</span>
-              <span className="text-xs text-slate-400">SDGs Tracked</span>
-            </div>
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4 text-center min-w-[120px]">
-              <span className="block text-3xl font-bold text-emerald-400 font-serif">2030</span>
-              <span className="text-xs text-slate-400">Target Year</span>
-            </div>
+          {/* Right: 3D Globe with Goal Status HUD */}
+          <div className="lg:w-[48%] flex justify-center items-center">
+            <GlobeView
+              goalNumber={activeGoal}
+              compact={true}
+              size={500}
+              showRing={true}
+              onCountryClick={(name, polygon, iso3) => {
+                if (iso3) navigate(`/country/${iso3}`);
+              }}
+            />
           </div>
         </div>
       </section>

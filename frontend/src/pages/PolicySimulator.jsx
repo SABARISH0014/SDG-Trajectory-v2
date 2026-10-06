@@ -26,24 +26,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import TargetSelectItem from '../components/TargetSelectItem';
 import { Slider } from '../components/ui/slider';
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label, unit }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-slate-950 text-white border border-slate-700 shadow-2xl p-3 rounded-lg z-[100] text-xs pointer-events-none notranslate">
-        <p className="font-semibold text-slate-400 border-b border-slate-800 pb-1 mb-1.5">
-          Year (X): <span className="text-white font-bold">{label}</span>
+      <div className="bg-slate-950 text-white border border-slate-700 shadow-2xl p-3.5 rounded-xl z-[100] text-xs pointer-events-none notranslate min-w-[220px]">
+        <p className="font-semibold text-slate-400 border-b border-slate-800 pb-1.5 mb-2 flex items-center justify-between">
+          <span>Year (X):</span> <span className="text-white font-bold text-sm">{label}</span>
         </p>
         {payload.map((entry, index) => {
           if (entry.value === null || entry.value === undefined) return null;
           const isPredicted = entry.dataKey === 'predictedValue';
           return (
-            <div key={index} className="flex items-center justify-between gap-4 py-0.5">
-              <span className="flex items-center gap-1.5" style={{ color: entry.color }}>
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+            <div key={index} className="flex items-center justify-between gap-3 py-1">
+              <span className="flex items-center gap-1.5 text-xs" style={{ color: entry.color }}>
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
                 {isPredicted ? 'Forecast (Y):' : 'Historical (Y):'}
               </span>
-              <span className="font-mono font-bold text-white">
-                {new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 }).format(entry.value)}
+              <span className="font-mono font-bold text-white text-xs">
+                {new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(entry.value)}
+                {unit && <span className="ml-1 text-[10px] text-slate-400 font-normal">({unit})</span>}
               </span>
             </div>
           );
@@ -59,6 +60,8 @@ const formatLargeNumber = (value) => {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
 };
 
+import GlobeView from '../components/GlobeView';
+
 export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -70,19 +73,37 @@ export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
 
   const effectiveGoalNumber = goalNumber || (urlGoal ? parseInt(urlGoal, 10) : null);
 
+  const [activeGoal, setActiveGoal] = useState(() => {
+    if (effectiveGoalNumber) return effectiveGoalNumber;
+    if (urlTarget) {
+      const g = parseInt(urlTarget.split('.')[0], 10);
+      if (!isNaN(g) && g >= 1 && g <= 17) return g;
+    }
+    return 1;
+  });
+
   const [selectedCountry, setSelectedCountry] = useState(() => {
     if (urlCountry && COUNTRIES.some(c => c.code === urlCountry)) return urlCountry;
     return 'IND';
   });
 
-  // Filter targets to this goal if effectiveGoalNumber is provided
+  const handleGoalChange = (newGoal) => {
+    setActiveGoal(newGoal);
+    const firstTarget = TARGETS.find(t => parseInt(t.code.split('.')[0], 10) === newGoal);
+    if (firstTarget) {
+      setSelectedTarget(firstTarget.code);
+    }
+  };
+
+  // Filter targets to this goal if effectiveGoalNumber or activeGoal is provided
   const filteredTargets = useMemo(() => {
-    if (!effectiveGoalNumber) return TARGETS;
+    const targetGoal = effectiveGoalNumber || activeGoal;
+    if (!targetGoal) return TARGETS;
     return TARGETS.filter(t => {
       const goalPart = parseInt(t.code.split('.')[0], 10);
-      return goalPart === effectiveGoalNumber;
+      return goalPart === targetGoal;
     });
-  }, [effectiveGoalNumber]);
+  }, [effectiveGoalNumber, activeGoal]);
 
   const [selectedTarget, setSelectedTarget] = useState(() => {
     if (urlTarget && TARGETS.some(t => t.code === urlTarget)) return urlTarget;
@@ -92,6 +113,14 @@ export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
     }
     return '1.1';
   });
+
+  const handleTargetChange = (newTarget) => {
+    setSelectedTarget(newTarget);
+    const g = parseInt(newTarget.split('.')[0], 10);
+    if (!isNaN(g) && g >= 1 && g <= 17 && g !== activeGoal) {
+      setActiveGoal(g);
+    }
+  };
 
   useEffect(() => {
     if (!filteredTargets.find(t => t.code === selectedTarget)) {
@@ -378,7 +407,7 @@ export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
                     ]}
                     width={65}
                   />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<CustomTooltip unit={targetInfo.unit} />} />
                   <Legend verticalAlign="top" height={36} iconType="circle" />
                   <Line name="Historical Baseline" type="monotone" dataKey="actualValue" stroke="#1B2A4A" strokeWidth={2.5} connectNulls={true} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} />
                   <Line name={`Simulated Policy Trajectory (${policyMultiplier.toFixed(1)}x)`} type="monotone" dataKey="predictedValue" stroke="#10b981" strokeWidth={2.5} strokeDasharray="5 5" connectNulls={true} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: '#059669', strokeWidth: 2 }} />
@@ -508,7 +537,65 @@ export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
   // Standalone Page Layout
   return (
     <div className="min-h-screen bg-cream text-warm-gray font-sans flex flex-col">
-      <Navbar />
+      <Navbar activeGoal={activeGoal} onGoalChange={handleGoalChange} />
+
+      {/* Hero Banner with 3D Globe & Goal Status */}
+      <section className="bg-navy text-white py-12 px-6 md:px-12 border-b border-white/10 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-10 relative z-10">
+          {/* Left: Info */}
+          <div className="lg:w-[50%] flex-shrink-0">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-400/20 text-emerald-300 text-xs font-semibold mb-4">
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Global Policy Intervention Modeler</span>
+            </div>
+            <h1 className="text-3xl md:text-5xl font-serif font-bold text-white mb-3">
+              What-If Policy Simulator
+            </h1>
+            <p className="text-slate-300 max-w-xl text-sm md:text-base leading-relaxed mb-6">
+              Simulate dynamic policy shifts, budget expansions, or systemic disruptions across 190+ nations. Observe how altering implementation speed modifies national 2030 trajectories for SDG {activeGoal}.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-3.5 text-center min-w-[110px]">
+                <span className="block text-2xl md:text-3xl font-bold text-emerald-400 font-serif">
+                  {COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry}
+                </span>
+                <span className="text-xs text-slate-400">Selected Country</span>
+              </div>
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-3.5 text-center min-w-[110px]">
+                <span className="block text-2xl md:text-3xl font-bold text-teal-400 font-serif">SDG {activeGoal}</span>
+                <span className="text-xs text-slate-400">Target {selectedTarget}</span>
+              </div>
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-3.5 text-center min-w-[110px]">
+                <span className="block text-2xl md:text-3xl font-bold text-purple-400 font-serif">{policyMultiplier.toFixed(1)}x</span>
+                <span className="text-xs text-slate-400">Speed Multiplier</span>
+              </div>
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-300">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+              <span>Hover or click the color strip in the header to switch Goal {activeGoal}. Click a country on the globe to simulate it.</span>
+            </div>
+          </div>
+
+          {/* Right: 3D Globe with Goal Status HUD */}
+          <div className="lg:w-[48%] flex justify-center items-center">
+            <GlobeView
+              goalNumber={activeGoal}
+              sdgTarget={selectedTarget}
+              onTargetChange={handleTargetChange}
+              compact={true}
+              size={500}
+              showRing={true}
+              onCountryClick={(name, polygon, iso3) => {
+                if (iso3 && COUNTRIES.some(c => c.code === iso3)) {
+                  setSelectedCountry(iso3);
+                }
+              }}
+            />
+          </div>
+        </div>
+      </section>
       
       {/* Breadcrumb Bar */}
       <div className="bg-slate-100 border-b border-slate-200 py-2.5 px-4 sm:px-6 lg:px-8">

@@ -82,11 +82,7 @@ def _set_cache(cache_key: str, data, ttl: int = CACHE_TTL):
         'data': stored_data
     }
 
-PERCENTAGE_TARGETS = {
-    '1.1', '1.2', '1.3', '2.1', '2.2', '4.1', '4.2', '4.3', '4.4', '4.6', 
-    '5.2', '5.3', '5.5', '6.1', '6.2', '7.1', '7.2', '8.3', '8.5', '8.6', 
-    '8.7', '9.2', '9.3', '9.c', '10.2', '10.4', '11.1', '11.2', '11.6', '16.9'
-}
+from sdg_harmonizer import harmonize_time_series, PERCENTAGE_TARGETS
 
 async def query_database(country_code: str, sdg_target: str) -> pd.DataFrame:
     db_country, db_target = translate_frontend_request(country_code, sdg_target)
@@ -128,9 +124,8 @@ async def query_database(country_code: str, sdg_target: str) -> pd.DataFrame:
                 df['Year'] = df['Year'].astype(int)
                 df['IndicatorValue'] = pd.to_numeric(df['IndicatorValue'], errors='coerce')
                 
-                # Sanitize percentage targets: exclude out-of-range count artifacts (>100 or <0)
-                if db_target in PERCENTAGE_TARGETS:
-                    df = df[(df['IndicatorValue'].isna()) | (df['IndicatorValue'].between(0.0, 100.0))].copy()
+                # Apply comprehensive multi-scale harmonization and artifact purging
+                df = harmonize_time_series(df, db_target)
             
             _set_cache(cache_key, df)
             return df

@@ -2,7 +2,7 @@ import { API_BASE_URL } from '@/config';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Scale, Play, Activity, Info, Trophy, TrendingUp, AlertTriangle, Loader2, Home, ChevronRight } from 'lucide-react';
+import { Scale, Play, Activity, Info, Trophy, TrendingUp, AlertTriangle, Loader2, Home, ChevronRight, Sparkles, Globe2 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -10,6 +10,7 @@ import { TARGETS, COUNTRIES } from '../lib/constants';
 import SplashScreenOverlay from '../components/SplashScreenOverlay';
 import { Skeleton } from '../components/ui/Skeleton';
 import { getTargetDetails, formatMetricValue } from '../data/sdgTargetsData';
+import GlobeView from '../components/GlobeView';
 import {
   LineChart,
   Line,
@@ -30,6 +31,35 @@ const formatLargeNumber = (value) => {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
 };
 
+const CustomTooltip = ({ active, payload, label, unit }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-950 text-white border border-slate-700 shadow-2xl p-3.5 rounded-xl z-[100] text-xs pointer-events-none notranslate min-w-[220px]">
+        <p className="font-semibold text-slate-400 border-b border-slate-800 pb-1.5 mb-2 flex items-center justify-between">
+          <span>Year (X):</span> <span className="text-white font-bold text-sm">{label}</span>
+        </p>
+        {payload.map((entry, index) => {
+          if (entry.value === null || entry.value === undefined) return null;
+          const isPredicted = entry.dataKey === 'predictedValue';
+          return (
+            <div key={index} className="flex items-center justify-between gap-3 py-1">
+              <span className="flex items-center gap-1.5 text-xs" style={{ color: entry.color }}>
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                {isPredicted ? '2030 Forecast:' : 'Historical Actual:'}
+              </span>
+              <span className="font-mono font-bold text-white text-xs">
+                {formatLargeNumber(entry.value)}
+                {unit && <span className="ml-1 text-[10px] text-slate-400 font-normal">({unit})</span>}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function CountryComparison({ goalNumber, isEmbedded = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -41,6 +71,15 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
 
   const effectiveGoalNumber = goalNumber || (urlGoal ? parseInt(urlGoal, 10) : null);
 
+  const [activeGoal, setActiveGoal] = useState(() => {
+    if (effectiveGoalNumber) return effectiveGoalNumber;
+    if (urlTarget) {
+      const g = parseInt(urlTarget.split('.')[0], 10);
+      if (!isNaN(g) && g >= 1 && g <= 17) return g;
+    }
+    return 1;
+  });
+
   const [countryA, setCountryA] = useState(() => {
     if (urlCountryA && COUNTRIES.some(c => c.code === urlCountryA)) return urlCountryA;
     return 'IND';
@@ -51,14 +90,38 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
     return 'USA';
   });
 
-  // Filter targets to this goal if effectiveGoalNumber is provided
+  // Track alternating slot selection: 'A' -> 'B' -> 'A' -> 'B'
+  const [nextCountrySlot, setNextCountrySlot] = useState('A');
+
+  const handleGlobeCountryClick = (name, polygon, iso3) => {
+    if (iso3 && COUNTRIES.some(c => c.code === iso3)) {
+      if (nextCountrySlot === 'A') {
+        setCountryA(iso3);
+        setNextCountrySlot('B');
+      } else {
+        setCountryB(iso3);
+        setNextCountrySlot('A');
+      }
+    }
+  };
+
+  const handleGoalChange = (newGoal) => {
+    setActiveGoal(newGoal);
+    const firstTarget = TARGETS.find(t => parseInt(t.code.split('.')[0], 10) === newGoal);
+    if (firstTarget) {
+      setSelectedTarget(firstTarget.code);
+    }
+  };
+
+  // Filter targets to this goal if effectiveGoalNumber or activeGoal is provided
   const filteredTargets = useMemo(() => {
-    if (!effectiveGoalNumber) return TARGETS;
+    const targetGoal = effectiveGoalNumber || activeGoal;
+    if (!targetGoal) return TARGETS;
     return TARGETS.filter(t => {
       const goalPart = parseInt(t.code.split('.')[0], 10);
-      return goalPart === effectiveGoalNumber;
+      return goalPart === targetGoal;
     });
-  }, [effectiveGoalNumber]);
+  }, [effectiveGoalNumber, activeGoal]);
 
   const [selectedTarget, setSelectedTarget] = useState(() => {
     if (urlTarget && TARGETS.some(t => t.code === urlTarget)) return urlTarget;
@@ -68,6 +131,14 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
     }
     return '1.1';
   });
+
+  const handleTargetChange = (newTarget) => {
+    setSelectedTarget(newTarget);
+    const g = parseInt(newTarget.split('.')[0], 10);
+    if (!isNaN(g) && g >= 1 && g <= 17 && g !== activeGoal) {
+      setActiveGoal(g);
+    }
+  };
 
   useEffect(() => {
     if (!filteredTargets.find(t => t.code === selectedTarget)) {
@@ -285,10 +356,7 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
                 ]}
                 width={75}
               />
-              <Tooltip 
-                contentStyle={{ borderRadius: '6px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} 
-                formatter={(val) => [`${formatLargeNumber(val)} ${targetInfo.unit}`, '']}
-              />
+              <Tooltip content={<CustomTooltip unit={targetInfo.unit} />} />
               <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
               <Line name="Historical Data" type="monotone" dataKey="actualValue" stroke={color} strokeWidth={2.5} connectNulls={true} dot={{ r: 3.5 }} />
               <Line name="Statistical Forecast (2030)" type="monotone" dataKey="predictedValue" stroke={color} strokeWidth={2.5} strokeDasharray="4 4" connectNulls={true} dot={{ r: 3.5 }} />
@@ -376,7 +444,14 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
             <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-navy block"></span> <span>Country A</span>
             </label>
-            <Select value={countryA} onValueChange={setCountryA} disabled={loading}>
+            <Select 
+              value={countryA} 
+              onValueChange={(val) => {
+                setCountryA(val);
+                setNextCountrySlot('B');
+              }} 
+              disabled={loading}
+            >
               <SelectTrigger className="w-full h-11 bg-white">
                 <SelectValue placeholder="Select Country A" />
               </SelectTrigger>
@@ -390,7 +465,14 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
             <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-purple-500 block"></span> <span>Country B</span>
             </label>
-            <Select value={countryB} onValueChange={setCountryB} disabled={loading}>
+            <Select 
+              value={countryB} 
+              onValueChange={(val) => {
+                setCountryB(val);
+                setNextCountrySlot('A');
+              }} 
+              disabled={loading}
+            >
               <SelectTrigger className="w-full h-11 bg-white">
                 <SelectValue placeholder="Select Country B" />
               </SelectTrigger>
@@ -486,7 +568,83 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
   // Standalone Page Layout
   return (
     <div className="min-h-screen bg-cream text-warm-gray font-sans flex flex-col">
-      <Navbar />
+      <Navbar activeGoal={activeGoal} onGoalChange={handleGoalChange} />
+
+      {/* Hero Banner with 3D Globe & Goal Status */}
+      <section className="bg-navy text-white py-12 px-6 md:px-12 border-b border-white/10 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-10 relative z-10">
+          {/* Left: Info & Head-to-Head */}
+          <div className="lg:w-[50%] flex-shrink-0">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-400/20 text-purple-300 text-xs font-semibold mb-4">
+              <Scale className="w-3.5 h-3.5" />
+              <span>Bilateral SDG Benchmark & Comparison Engine</span>
+            </div>
+            <h1 className="text-3xl md:text-5xl font-serif font-bold text-white mb-3">
+              Country Benchmarking
+            </h1>
+            <p className="text-slate-300 max-w-xl text-sm md:text-base leading-relaxed mb-6">
+              Compare 2030 development paths side-by-side for two nations. Observe how national progress trajectories diverge for SDG {activeGoal} across historical baselines and 2030 projections.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              <div 
+                className={`bg-white/5 backdrop-blur-md border rounded-xl p-3.5 text-center min-w-[110px] transition-all ${
+                  nextCountrySlot === 'A' 
+                    ? 'border-teal-400/70 ring-2 ring-teal-400/40 shadow-lg shadow-teal-500/20 bg-teal-500/10' 
+                    : 'border-white/10'
+                }`}
+              >
+                <span className="block text-2xl md:text-3xl font-bold text-teal-400 font-serif">{countryAName}</span>
+                <span className="text-xs text-slate-400 flex items-center justify-center gap-1.5 mt-0.5">
+                  <span>Country A</span>
+                  {nextCountrySlot === 'A' && (
+                    <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse shadow-[0_0_6px_#2dd4bf]" title="Next globe click updates Country A" />
+                  )}
+                </span>
+              </div>
+              <div 
+                className={`bg-white/5 backdrop-blur-md border rounded-xl p-3.5 text-center min-w-[110px] transition-all ${
+                  nextCountrySlot === 'B' 
+                    ? 'border-purple-400/70 ring-2 ring-purple-400/40 shadow-lg shadow-purple-500/20 bg-purple-500/10' 
+                    : 'border-white/10'
+                }`}
+              >
+                <span className="block text-2xl md:text-3xl font-bold text-purple-400 font-serif">{countryBName}</span>
+                <span className="text-xs text-slate-400 flex items-center justify-center gap-1.5 mt-0.5">
+                  <span>Country B</span>
+                  {nextCountrySlot === 'B' && (
+                    <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse shadow-[0_0_6px_#c084fc]" title="Next globe click updates Country B" />
+                  )}
+                </span>
+              </div>
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-3.5 text-center min-w-[110px]">
+                <span className="block text-2xl md:text-3xl font-bold text-emerald-400 font-serif">SDG {activeGoal}</span>
+                <span className="text-xs text-slate-400">Target {selectedTarget}</span>
+              </div>
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-300">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+              <span>
+                Globe click alternates: next click sets <strong className={nextCountrySlot === 'A' ? 'text-teal-300' : 'text-purple-300'}>Country {nextCountrySlot}</strong>.
+              </span>
+            </div>
+          </div>
+
+          {/* Right: 3D Globe with Goal Status HUD */}
+          <div className="lg:w-[48%] flex justify-center items-center">
+            <GlobeView
+              goalNumber={activeGoal}
+              sdgTarget={selectedTarget}
+              onTargetChange={handleTargetChange}
+              compact={true}
+              size={500}
+              showRing={true}
+              onCountryClick={handleGlobeCountryClick}
+            />
+          </div>
+        </div>
+      </section>
       
       {/* Breadcrumb Bar */}
       <div className="bg-slate-100 border-b border-slate-200 py-2.5 px-4 sm:px-6 lg:px-8">

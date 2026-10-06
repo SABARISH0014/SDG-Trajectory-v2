@@ -91,15 +91,17 @@ def classify_status(baseline_value: float, projected_value: float, sdg_target: s
         else:
             return "Off-track"
 
-PERCENTAGE_TARGETS = {
-    '1.1', '1.2', '1.3', '2.1', '2.2', '4.1', '4.2', '4.3', '4.4', '4.6', 
-    '5.2', '5.3', '5.5', '6.1', '6.2', '7.1', '7.2', '8.3', '8.5', '8.6', 
-    '8.7', '9.2', '9.3', '9.c', '10.2', '10.4', '11.1', '11.2', '11.6', '16.9'
-}
+from sdg_harmonizer import (
+    PERCENTAGE_TARGETS, 
+    INDEX_100_TARGETS, 
+    INDEX_1_TARGETS, 
+    harmonize_time_series, 
+    clamp_indicator_value
+)
 
 def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multiplier: float = 1.0, contamination_val: float = 0.1) -> dict:
     """
-    Core mathematical logic for SDG trajectory regression.
+    Core mathematical logic for SDG trajectory regression with strict domain bounds.
     """
     if df.empty:
         logger.warning("Empty dataframe received. Triggering sparse data bypass.")
@@ -110,13 +112,10 @@ def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multipli
             "projected_value_2030": None
         }
 
-    df_clean = df.dropna(subset=['IndicatorValue', 'Year']).copy()
-    
-    # Filter percentage targets to [0, 100]
-    if str(sdg_target) in PERCENTAGE_TARGETS:
-        df_clean = df_clean[df_clean['IndicatorValue'].between(0.0, 100.0)].copy()
+    # Step 1: Harmonize time series and purge mixed-scale artifacts
+    df_clean = harmonize_time_series(df, sdg_target)
 
-    # Sparse Data Bypass (CRITICAL): if length is < 2
+    # Sparse Data Bypass: if length is < 2
     if len(df_clean.dropna(subset=['IndicatorValue'])) < 2:
         logger.warning(f"Insufficient real data. Triggering sparse data bypass.")
         return {
@@ -149,28 +148,43 @@ def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multipli
             "projected_value_2030": None
         }
         
+    target_str = str(sdg_target).strip()
+    is_pct = target_str in PERCENTAGE_TARGETS
+    is_idx100 = target_str in INDEX_100_TARGETS
+    is_idx1 = target_str in INDEX_1_TARGETS
+
+    def clamp_val(val: float) -> float:
+        val = float(val)
+        if is_pct or is_idx100:
+            return min(100.0, max(0.0, val))
+        elif is_idx1:
+            return min(1.0, max(0.0, val))
+        elif target_str not in {'8.1', '8.2', '10.1', '17.2', '17.3', '17.13'}:
+            return max(0.0, val)
+        return val
+
     y_train = real_df['IndicatorValue'].values
     max_year = int(real_df['Year'].max())
     start_pred_year = max_year + 1
     
     if np.var(y_train) < 1e-8:
         # Flat trend
-        baseline_val = float(y_train[0])
+        baseline_val = clamp_val(float(y_train[0]))
         projection_2030 = baseline_val
         status = classify_status(baseline_val, projection_2030, sdg_target)
         
         predictions = []
         if start_pred_year <= 2030:
-            predictions = [{"Year": year, "PredictedValue": max(0.0, float(projection_2030))} for year in range(start_pred_year, 2031)]
+            predictions = [{"Year": year, "PredictedValue": clamp_val(projection_2030)} for year in range(start_pred_year, 2031)]
         else:
-            predictions = [{"Year": 2030, "PredictedValue": max(0.0, float(projection_2030))}]
+            predictions = [{"Year": 2030, "PredictedValue": clamp_val(projection_2030)}]
             
         return {
             "predictions": predictions,
             "status": status,
             "baseline_value": baseline_val,
-            "projected_value_2030": max(0.0, float(projection_2030)),
-            "policy_simulated_projection": max(0.0, float(projection_2030)) if policy_multiplier != 1.0 else None
+            "projected_value_2030": clamp_val(projection_2030),
+            "policy_simulated_projection": clamp_val(projection_2030) if policy_multiplier != 1.0 else None
         }
     
     X_train = real_df[['Year']].values
@@ -192,11 +206,7 @@ def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multipli
             else:
                 pred_val = model.predict([[year]])[0]
                 
-            # Zero-Floor & 100% Upper Cap for percentage targets
-            pred_val = max(0.0, float(pred_val))
-            if str(sdg_target) in PERCENTAGE_TARGETS:
-                pred_val = min(100.0, pred_val)
-                
+            pred_val = clamp_val(pred_val)
             predictions.append({
                 "Year": year,
                 "PredictedValue": pred_val
@@ -210,16 +220,13 @@ def calculate_core_trajectory(df: pd.DataFrame, sdg_target: str, policy_multipli
         else:
             pred_val = model.predict([[2030]])[0]
         
-        pred_val = max(0.0, float(pred_val))
-        if str(sdg_target) in PERCENTAGE_TARGETS:
-            pred_val = min(100.0, pred_val)
-
+        pred_val = clamp_val(pred_val)
         predictions.append({
             "Year": 2030,
             "PredictedValue": pred_val
         })
         
-    baseline_val = float(y_train[0])
+    baseline_val = clamp_val(float(y_train[0]))
     projection_2030 = float(predictions[-1]['PredictedValue'])
     
     status = classify_status(baseline_val, projection_2030, sdg_target)

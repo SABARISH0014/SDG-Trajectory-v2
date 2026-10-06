@@ -24,7 +24,7 @@ import { COUNTRIES } from '../lib/constants';
 import LanguageSwitcher from './LanguageSwitcher';
 import { usePWA } from '../context/PWAContext';
 
-export default function Navbar() {
+export default function Navbar({ activeGoal = null, onGoalChange = null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { openInstallModal, isInstalled } = usePWA();
@@ -291,16 +291,36 @@ export default function Navbar() {
         </div>
 
         {/* 17 SDG Color Mini Strip under header */}
-        <div className="flex h-1 w-full overflow-hidden">
-          {Array.from({ length: 17 }, (_, i) => i + 1).map(num => (
-            <Link
-              key={num}
-              to={`/goal/${num}`}
-              className="flex-1 transition-transform hover:scale-y-150 origin-bottom"
-              style={{ backgroundColor: sdgColors[num] }}
-              title={`Goal ${num}: ${sdgGoalsContent[num - 1]?.title}`}
-            />
-          ))}
+        <div className="flex h-1.5 w-full overflow-hidden bg-slate-950">
+          {Array.from({ length: 17 }, (_, i) => i + 1).map(num => {
+            const isSelected = activeGoal === num;
+            return (
+              <Link
+                key={num}
+                to={`/goal/${num}`}
+                onClick={(e) => {
+                  if (onGoalChange) {
+                    e.preventDefault();
+                    onGoalChange(num);
+                  }
+                }}
+                onMouseEnter={() => {
+                  if (onGoalChange) {
+                    onGoalChange(num);
+                  }
+                }}
+                className={`flex-1 transition-all duration-200 origin-bottom ${
+                  onGoalChange ? 'cursor-pointer' : ''
+                } ${
+                  isSelected 
+                    ? 'scale-y-[2.2] brightness-125 opacity-100 z-10 shadow-[0_0_8px_rgba(255,255,255,0.6)]' 
+                    : 'opacity-80 hover:opacity-100 hover:scale-y-[1.8]'
+                }`}
+                style={{ backgroundColor: sdgColors[num] }}
+                title={`Goal ${num}: ${sdgGoalsContent[num - 1]?.title}${onGoalChange ? ' (Hover/Click to switch Globe)' : ''}`}
+              />
+            );
+          })}
         </div>
 
         {/* Mobile Navigation Drawer */}

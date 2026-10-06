@@ -75,7 +75,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-cream text-warm-gray font-sans">
-      <Navbar />
+      <Navbar activeGoal={activeGoal} onGoalChange={setActiveGoal} />
 
       {/* ===== SECTION 1: Dark Hero Header with SDG image ===== */}
       <section className="bg-navy text-white relative">
