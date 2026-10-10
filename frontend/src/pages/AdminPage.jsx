@@ -2,6 +2,9 @@ import { API_BASE_URL } from '@/config';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import Navbar from '../components/Navbar';
+import LoadingTriviaCard from '../components/LoadingTriviaCard';
+import { invalidateTriviaCache } from '../lib/triviaService';
 import { 
   ShieldCheck, 
   Database, 
@@ -38,7 +41,8 @@ import {
   Download,
   Filter,
   Search,
-  History
+  History,
+  Lightbulb
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
@@ -50,11 +54,21 @@ import { getTargetDetails } from '../data/sdgTargetsData';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 
 const AVAILABLE_AI_MODELS = [
-  { id: 'google/gemma-4-26b-a4b-it:free', name: 'Google Gemma 4 (26B) — Free & Fast', tier: 'Recommended' },
-  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Meta Llama 3.3 (70B) — Free & Powerful', tier: 'High Intelligence' },
-  { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3 Chat — High Accuracy', tier: 'Direct OpenRouter' },
-  { id: 'qwen/qwen-2.5-72b-instruct:free', name: 'Qwen 2.5 (72B) — Multilingual Free', tier: 'Broad Language' },
-  { id: 'mistralai/mistral-7b-instruct:free', name: 'Mistral 7B Instruct — Lightweight Free', tier: 'Speed' },
+  { id: 'openrouter/auto', name: 'OpenRouter Auto — Best Available Router (Recommended)', tier: 'Recommended' },
+  { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3 Chat — High Accuracy & Reasoning', tier: 'Direct OpenRouter' },
+  { id: 'nvidia/nemotron-3.5-lightning:free', name: 'Nvidia Nemotron 3.5 — Ultra-Fast Free Tier', tier: 'Fast Free' },
+  { id: 'liquid/lfm-2.5-2.6b:free', name: 'Liquid LFM 2.5 — Lightweight Free Tier', tier: 'Speed' },
+  { id: 'google/gemma-4-26b-a4b-it:free', name: 'Google Gemma 4 (26B) — Free (May be rate-limited)', tier: 'Free Tier' },
+];
+
+const ADMIN_NAV_TABS = [
+  { id: 'overview', label: 'Overview & Health', icon: Activity, color: 'text-rose-600' },
+  { id: 'data-explorer', label: 'Data Explorer & Overrides', icon: TableIcon, color: 'text-blue-600' },
+  { id: 'ai-config', label: 'AI Copilot & Models', icon: Bot, color: 'text-indigo-600' },
+  { id: 'algorithms', label: 'Algorithms & Pipelines', icon: Sliders, color: 'text-cyan-600' },
+  { id: 'audit-logs', label: 'Audit & Activity Trail', icon: ScrollText, color: 'text-amber-600' },
+  { id: 'trivia', label: 'Tips & Trivia', icon: Sparkles, color: 'text-amber-500' },
+  { id: 'security', label: 'Security & Access', icon: KeyRound, color: 'text-emerald-600' },
 ];
 
 const PERSONA_DESCRIPTIONS = {
@@ -144,6 +158,32 @@ export default function AdminPage() {
   const [auditFilter, setAuditFilter] = useState('ALL');
   const [auditSearch, setAuditSearch] = useState('');
   const [auditClearStatus, setAuditClearStatus] = useState('');
+
+  // Tips & Trivia Management State
+  const [triviaList, setTriviaList] = useState([]);
+  const [triviaLoading, setTriviaLoading] = useState(false);
+  const [triviaFilter, setTriviaFilter] = useState('ALL');
+  const [triviaSearch, setTriviaSearch] = useState('');
+  const [triviaStatus, setTriviaStatus] = useState('');
+  const [triviaMessage, setTriviaMessage] = useState('');
+
+  // Loading Screen Timing & Experience State
+  const [triviaInterval, setTriviaInterval] = useState(3.5);
+  const [triviaAllowedCategories, setTriviaAllowedCategories] = useState(['Website Tip', 'SDG Fact', 'UN Trivia']);
+  const [triviaTimingSaving, setTriviaTimingSaving] = useState(false);
+  const [triviaTimingStatus, setTriviaTimingStatus] = useState('');
+  const [triviaTimingMessage, setTriviaTimingMessage] = useState('');
+  const [showLiveTimingPreview, setShowLiveTimingPreview] = useState(false);
+
+  // Trivia Modal / Editor State
+  const [isTriviaModalOpen, setIsTriviaModalOpen] = useState(false);
+  const [editingTriviaItem, setEditingTriviaItem] = useState(null);
+  const [triviaFormCategory, setTriviaFormCategory] = useState('Website Tip');
+  const [triviaFormText, setTriviaFormText] = useState('');
+  const [triviaFormIcon, setTriviaFormIcon] = useState('💡');
+  const [triviaFormActive, setTriviaFormActive] = useState(true);
+  const [isSavingTrivia, setIsSavingTrivia] = useState(false);
+  const [deletingTriviaId, setDeletingTriviaId] = useState(null);
 
   const fetchStats = async (authToken = token) => {
     if (!authToken) return;
@@ -247,6 +287,7 @@ export default function AdminPage() {
       fetchConfig();
       fetchAiConfig();
       fetchAuditLogs();
+      fetchTriviaList();
     }
   }, [token]);
 
@@ -256,6 +297,9 @@ export default function AdminPage() {
     }
     if (token && activeTab === 'audit-logs') {
       fetchAuditLogs();
+    }
+    if (token && activeTab === 'trivia') {
+      fetchTriviaList();
     }
   }, [token, activeTab, explorerCountry, explorerTarget]);
 
@@ -522,6 +566,203 @@ export default function AdminPage() {
     document.body.removeChild(link);
   };
 
+  const fetchTriviaList = async (authToken = token) => {
+    if (!authToken) return;
+    setTriviaLoading(true);
+    try {
+      const [resTrivia, resConfig] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/admin/trivia`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        }),
+        axios.get(`${API_BASE_URL}/api/trivia/config`).catch(() => null)
+      ]);
+      const items = Array.isArray(resTrivia.data) 
+        ? resTrivia.data 
+        : (resTrivia.data?.trivia || resTrivia.data?.items || []);
+      setTriviaList(items);
+
+      if (resConfig && resConfig.data) {
+        if (resConfig.data.rotation_interval) {
+          setTriviaInterval(parseFloat(resConfig.data.rotation_interval));
+        }
+        if (Array.isArray(resConfig.data.active_categories) && resConfig.data.active_categories.length > 0) {
+          setTriviaAllowedCategories(resConfig.data.active_categories);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch admin trivia:", err);
+      if (err.response && err.response.status === 401) {
+        handleLogout();
+      }
+    } finally {
+      setTriviaLoading(false);
+    }
+  };
+
+  const handleSaveLoadingConfig = async (e) => {
+    if (e) e.preventDefault();
+    setTriviaTimingSaving(true);
+    setTriviaTimingStatus('saving');
+    try {
+      await axios.post(`${API_BASE_URL}/api/admin/trivia/config`, {
+        rotation_interval: parseFloat(triviaInterval),
+        active_categories: triviaAllowedCategories,
+        spinner_style: 'sdg_ring'
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      invalidateTriviaCache();
+      setTriviaTimingStatus('success');
+      setTriviaTimingMessage('Loading screen rotation settings updated successfully.');
+      setTimeout(() => {
+        setTriviaTimingStatus('');
+        setTriviaTimingMessage('');
+      }, 3500);
+    } catch (err) {
+      console.error("Failed to update loading screen timing:", err);
+      setTriviaTimingStatus('error');
+      setTriviaTimingMessage(err.response?.data?.detail || 'Failed to update timing configuration.');
+    } finally {
+      setTriviaTimingSaving(false);
+    }
+  };
+
+  const handleToggleAllowedCategory = (cat) => {
+    setTriviaAllowedCategories(prev => {
+      if (prev.includes(cat)) {
+        if (prev.length === 1) return prev;
+        return prev.filter(c => c !== cat);
+      } else {
+        return [...prev, cat];
+      }
+    });
+  };
+
+  const handleOpenCreateTrivia = () => {
+    setEditingTriviaItem(null);
+    setTriviaFormCategory('Website Tip');
+    setTriviaFormText('');
+    setTriviaFormIcon('💡');
+    setTriviaFormActive(true);
+    setIsTriviaModalOpen(true);
+    setTriviaMessage('');
+  };
+
+  const handleOpenEditTrivia = (item) => {
+    setEditingTriviaItem(item);
+    setTriviaFormCategory(item.category || 'Website Tip');
+    setTriviaFormText(item.text || '');
+    setTriviaFormIcon(item.icon || '💡');
+    setTriviaFormActive(Boolean(item.is_active));
+    setIsTriviaModalOpen(true);
+    setTriviaMessage('');
+  };
+
+  const handleSaveTriviaItem = async (e) => {
+    e.preventDefault();
+    if (!triviaFormText.trim()) return;
+
+    setIsSavingTrivia(true);
+    setTriviaStatus('saving');
+    try {
+      if (editingTriviaItem) {
+        await axios.put(`${API_BASE_URL}/api/admin/trivia/${editingTriviaItem.id}`, {
+          category: triviaFormCategory,
+          text: triviaFormText.trim(),
+          icon: triviaFormIcon || '💡',
+          is_active: triviaFormActive
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setTriviaStatus('success');
+        setTriviaMessage('Tip / Trivia item updated successfully.');
+      } else {
+        await axios.post(`${API_BASE_URL}/api/admin/trivia`, {
+          category: triviaFormCategory,
+          text: triviaFormText.trim(),
+          icon: triviaFormIcon || '💡',
+          is_active: triviaFormActive
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setTriviaStatus('success');
+        setTriviaMessage('New Tip / Trivia item created successfully.');
+      }
+      setIsTriviaModalOpen(false);
+      fetchTriviaList();
+      setTimeout(() => {
+        setTriviaStatus('');
+        setTriviaMessage('');
+      }, 3500);
+    } catch (err) {
+      console.error("Failed to save trivia item:", err);
+      setTriviaStatus('error');
+      setTriviaMessage(err.response?.data?.detail || 'Failed to save trivia item.');
+    } finally {
+      setIsSavingTrivia(false);
+    }
+  };
+
+  const handleDeleteTriviaItem = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this tip / trivia item?")) return;
+    setDeletingTriviaId(id);
+    try {
+      await axios.delete(`${API_BASE_URL}/api/admin/trivia/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTriviaStatus('success');
+      setTriviaMessage('Trivia item deleted successfully.');
+      fetchTriviaList();
+      setTimeout(() => {
+        setTriviaStatus('');
+        setTriviaMessage('');
+      }, 3000);
+    } catch (err) {
+      console.error("Failed to delete trivia item:", err);
+      setTriviaStatus('error');
+      setTriviaMessage(err.response?.data?.detail || 'Failed to delete trivia item.');
+    } finally {
+      setDeletingTriviaId(null);
+    }
+  };
+
+  const handleToggleTriviaActive = async (item) => {
+    const nextStatus = item.is_active ? 0 : 1;
+    setTriviaList(prev => prev.map(t => t.id === item.id ? { ...t, is_active: nextStatus } : t));
+    try {
+      await axios.put(`${API_BASE_URL}/api/admin/trivia/${item.id}`, {
+        category: item.category,
+        text: item.text,
+        icon: item.icon,
+        is_active: Boolean(nextStatus)
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error("Failed to toggle trivia item:", err);
+      fetchTriviaList();
+    }
+  };
+
+  const filteredTrivia = triviaList.filter(item => {
+    const term = triviaSearch.trim().toLowerCase();
+    const matchesSearch = !term ||
+      (item.text && item.text.toLowerCase().includes(term)) ||
+      (item.category && item.category.toLowerCase().includes(term));
+    if (!matchesSearch) return false;
+    if (triviaFilter === 'ALL') return true;
+    return item.category === triviaFilter;
+  });
+
+  const getTriviaCategoryBadge = (category) => {
+    if (category === 'Website Tip') return 'bg-blue-50 text-blue-700 border-blue-200';
+    if (category === 'SDG Fact') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    if (category === 'UN Trivia') return 'bg-purple-50 text-purple-700 border-purple-200';
+    return 'bg-amber-50 text-amber-700 border-amber-200';
+  };
+
+  const TRIVIA_EMOJI_PRESETS = ['💡', '🌍', '🇺🇳', '⚡', '📊', '🎯', '🌱', '🤝', '📈', '🕊️', '🔬', '🎓'];
+
   const filteredLogs = auditLogs.filter(log => {
     const term = auditSearch.trim().toLowerCase();
     const matchesSearch = !term || 
@@ -556,12 +797,7 @@ export default function AdminPage() {
   if (!token) {
     return (
       <div className="min-h-screen flex flex-col bg-cream">
-        <header className="flex-none w-full h-14 bg-navy/95 backdrop-blur-md z-50 border-b border-white/10 flex items-center justify-between px-6">
-          <Link to="/" className="flex items-center text-sm font-semibold tracking-wide text-white hover:text-slate-300 transition-colors">
-            <ArrowLeft className="w-4 h-4 mr-2" /> <span>Back to Forecaster</span>
-          </Link>
-          <LanguageSwitcher />
-        </header>
+        <Navbar />
         <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-cream to-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <Card className="w-full max-w-md bg-white shadow-xl border-slate-200">
             <CardHeader className="text-center space-y-2 mb-2">
@@ -613,107 +849,80 @@ export default function AdminPage() {
   // Authenticated Admin Dashboard
   return (
     <div className="min-h-screen bg-cream flex flex-col">
-      {/* Top Navbar */}
-      <header className="flex-none w-full h-14 bg-navy/95 backdrop-blur-md z-50 border-b border-white/10 flex items-center justify-between px-6">
-        <Link to="/" className="flex items-center text-sm font-semibold tracking-wide text-white hover:text-slate-300 transition-colors">
-          <ArrowLeft className="w-4 h-4 mr-2" /> <span>Back to Forecaster</span>
-        </Link>
-        <div className="flex items-center gap-4">
-          <LanguageSwitcher />
-          <Button variant="outline" size="sm" onClick={handleLogout} className="text-slate-200 border-white/20 hover:bg-white/10 bg-transparent h-8 text-xs shadow-sm">
-            Sign Out
-          </Button>
+      {/* Standardized Project Navbar */}
+      <Navbar />
+
+      {/* Admin Context Subheader Banner */}
+      <div className="bg-navy/90 border-b border-white/10 text-white py-2.5 px-4 sm:px-6 lg:px-8 shadow-xs">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 text-xs">
+            <Link to="/" className="text-slate-400 hover:text-white transition-colors">Home</Link>
+            <span className="text-slate-600">/</span>
+            <span className="text-teal-400 font-semibold">Admin Portal</span>
+            <span className="text-slate-600">/</span>
+            <span className="text-slate-300 font-medium">
+              {ADMIN_NAV_TABS.find(t => t.id === activeTab)?.label || activeTab}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-xs text-slate-300 bg-white/10 px-2.5 py-1 rounded-md border border-white/10">
+              <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Authenticated as <strong className="text-white">admin</strong></span>
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleLogout} 
+              className="text-xs h-7 border-rose-400/40 text-rose-300 hover:bg-rose-500/20 hover:text-white bg-transparent"
+            >
+              Sign Out
+            </Button>
+          </div>
         </div>
-      </header>
+      </div>
 
       {/* Main Workspace */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 space-y-6 animate-in fade-in duration-300">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 animate-in fade-in duration-300">
         
-        {/* Header Title & Tab Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-slate-200 pb-4 gap-4">
+        {/* Header Title */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 gap-4">
           <div>
-            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-warm-gray flex items-center gap-2.5">
+            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-navy flex items-center gap-2.5">
               <ShieldCheck className="w-7 h-7 text-rose-600" /> <span>Control Center & Administration</span>
             </h2>
             <p className="text-slate-500 mt-1 max-w-2xl text-xs sm:text-sm">
-              Live telemetry, database operations, indicator overrides, AI models, algorithm parameters, and access security.
+              Live telemetry, database operations, indicator overrides, AI models, algorithm parameters, and loading screen tips.
             </p>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex bg-slate-200/80 p-1 rounded-lg border border-slate-300/60 self-start sm:self-auto flex-wrap gap-1">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                activeTab === 'overview'
-                  ? 'bg-white text-navy shadow-sm'
-                  : 'text-slate-600 hover:text-navy'
-              }`}
-            >
-              <Activity className="w-3.5 h-3.5" />
-              <span>Overview & Health</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('data-explorer')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                activeTab === 'data-explorer'
-                  ? 'bg-white text-navy shadow-sm'
-                  : 'text-slate-600 hover:text-navy'
-              }`}
-            >
-              <TableIcon className="w-3.5 h-3.5" />
-              <span>Data Explorer & Overrides</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('ai-config')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                activeTab === 'ai-config'
-                  ? 'bg-white text-navy shadow-sm'
-                  : 'text-slate-600 hover:text-navy'
-              }`}
-            >
-              <Bot className="w-3.5 h-3.5 text-indigo-600" />
-              <span>AI Copilot & Models</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('algorithms')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                activeTab === 'algorithms'
-                  ? 'bg-white text-navy shadow-sm'
-                  : 'text-slate-600 hover:text-navy'
-              }`}
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Algorithms & Pipelines</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('audit-logs')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                activeTab === 'audit-logs'
-                  ? 'bg-white text-navy shadow-sm'
-                  : 'text-slate-600 hover:text-navy'
-              }`}
-            >
-              <ScrollText className="w-3.5 h-3.5 text-amber-600" />
-              <span>Audit & Activity Trail</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('security')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                activeTab === 'security'
-                  ? 'bg-white text-navy shadow-sm'
-                  : 'text-slate-600 hover:text-navy'
-              }`}
-            >
-              <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Security & Access</span>
-            </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>System Online</span>
+            </span>
           </div>
+        </div>
+
+        {/* Standardized Navigation Tabs Bar */}
+        <div className="w-full bg-white border border-slate-200/90 rounded-2xl p-2 shadow-xs flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          {ADMIN_NAV_TABS.map(tab => {
+            const Icon = tab.icon;
+            const isSelected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  isSelected
+                    ? 'bg-navy text-white shadow-sm'
+                    : 'text-slate-600 hover:text-navy hover:bg-slate-100/70'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-teal-400' : tab.color}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* ========================================================= */}
@@ -1767,6 +1976,511 @@ export default function AdminPage() {
                 </Button>
               </div>
             </div>
+
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 7: LOADING TIPS & TRIVIA MANAGER                      */}
+        {/* ========================================================= */}
+        {activeTab === 'trivia' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Header Control Card */}
+            <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div className="space-y-1">
+                  <h3 className="text-base font-semibold text-warm-gray flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-500" /> <span>Loading Screen Tips, Tricks & Trivia</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
+                    Short facts, website tips, and United Nations trivia that dynamically rotate during forecast calculations and page transitions to keep users informed and engaged.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <Button
+                    onClick={() => fetchTriviaList()}
+                    variant="outline"
+                    size="sm"
+                    disabled={triviaLoading}
+                    className="text-xs h-8 bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 mr-1.5 text-slate-500 ${triviaLoading ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </Button>
+                  
+                  <Button
+                    onClick={handleOpenCreateTrivia}
+                    size="sm"
+                    className="text-xs h-8 bg-rose-600 hover:bg-rose-700 text-white font-medium shadow-sm transition-all"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5 mr-1.5" />
+                    <span>Add New Tip / Trivia</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Status / Alert Banner */}
+              {triviaMessage && (
+                <div className={`p-3 rounded-lg text-xs font-medium border flex items-center gap-2 ${
+                  triviaStatus === 'success'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-red-50 text-red-700 border-red-200'
+                }`}>
+                  {triviaStatus === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  )}
+                  <span>{triviaMessage}</span>
+                </div>
+              )}
+
+              {/* Metric Counter Pills */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-100 text-center">
+                  <div className="text-[11px] font-medium text-slate-500">Total Curated</div>
+                  <div className="text-xl font-bold font-mono text-navy mt-0.5">{triviaList.length}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-emerald-50/60 border border-emerald-100 text-center">
+                  <div className="text-[11px] font-medium text-emerald-700">Active Rotating</div>
+                  <div className="text-xl font-bold font-mono text-emerald-700 mt-0.5">
+                    {triviaList.filter(t => t.is_active).length}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg bg-blue-50/60 border border-blue-100 text-center">
+                  <div className="text-[11px] font-medium text-blue-700">Website Tips</div>
+                  <div className="text-xl font-bold font-mono text-blue-700 mt-0.5">
+                    {triviaList.filter(t => t.category === 'Website Tip').length}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg bg-emerald-50/40 border border-emerald-100 text-center">
+                  <div className="text-[11px] font-medium text-emerald-800">SDG Facts</div>
+                  <div className="text-xl font-bold font-mono text-emerald-800 mt-0.5">
+                    {triviaList.filter(t => t.category === 'SDG Fact').length}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg bg-purple-50/60 border border-purple-100 text-center col-span-2 sm:col-span-1">
+                  <div className="text-[11px] font-medium text-purple-700">UN Trivia</div>
+                  <div className="text-xl font-bold font-mono text-purple-700 mt-0.5">
+                    {triviaList.filter(t => t.category === 'UN Trivia').length}
+                  </div>
+                </div>
+              </div>
+
+              {/* Search & Filter Toolbar */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search by keywords or text..."
+                    value={triviaSearch}
+                    onChange={(e) => setTriviaSearch(e.target.value)}
+                    className="pl-8 h-9 text-xs bg-slate-50 border-slate-200"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-medium text-slate-400 mr-1 flex items-center gap-1">
+                    <Filter className="w-3 h-3" /> Filter:
+                  </span>
+                  {['ALL', 'Website Tip', 'SDG Fact', 'UN Trivia'].map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setTriviaFilter(cat)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                        triviaFilter === cat
+                          ? 'bg-navy text-white shadow-sm'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Timing & Experience Configuration Card */}
+            <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-warm-gray flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4 text-teal-600" />
+                    <span>Loading Screen Timing & Experience Settings</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Adjust how fast messages rotate on loading screens, toggle allowed categories, or test in real time.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowLiveTimingPreview(!showLiveTimingPreview)}
+                    className="text-xs h-8 text-slate-700 border-slate-200"
+                  >
+                    <Eye className="w-3.5 h-3.5 mr-1 text-teal-600" />
+                    <span>{showLiveTimingPreview ? 'Hide Live Preview' : 'Test Live Preview'}</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleSaveLoadingConfig}
+                    disabled={triviaTimingSaving}
+                    className="text-xs h-8 bg-teal-600 hover:bg-teal-700 text-white font-medium shadow-sm transition-all"
+                  >
+                    {triviaTimingSaving ? (
+                      <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Saving...</>
+                    ) : (
+                      <><Save className="w-3.5 h-3.5 mr-1.5" /> Save Timing Options</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {triviaTimingMessage && (
+                <div className={`p-2.5 rounded-lg text-xs font-medium border flex items-center gap-2 ${
+                  triviaTimingStatus === 'success'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-red-50 text-red-700 border-red-200'
+                }`}>
+                  {triviaTimingStatus === 'success' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                  )}
+                  <span>{triviaTimingMessage}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Rotation Duration Setting */}
+                <div className="space-y-3 p-4 rounded-xl bg-slate-50/70 border border-slate-200/70 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                        <span>Rotation Duration per Tip</span>
+                      </label>
+                      <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 border border-teal-200">
+                        {triviaInterval} seconds
+                      </span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min="2.0"
+                      max="10.0"
+                      step="0.5"
+                      value={triviaInterval}
+                      onChange={(e) => setTriviaInterval(parseFloat(e.target.value))}
+                      className="w-full accent-teal-600 cursor-pointer h-2 bg-slate-200 rounded-lg"
+                    />
+
+                    <div className="flex justify-between text-[11px] text-slate-400 font-medium">
+                      <span>Fast (2.0s)</span>
+                      <span className="text-teal-700 font-semibold">Recommended (3.5s - 4.5s)</span>
+                      <span>Relaxed (10.0s)</span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed pt-1 border-t border-slate-200/50">
+                    Controls how long each trivia or tip stays visible before automatically cycling to the next message.
+                  </p>
+                </div>
+
+                {/* Allowed Categories Toggle */}
+                <div className="space-y-3 p-4 rounded-xl bg-slate-50/70 border border-slate-200/70">
+                  <label className="text-xs font-semibold text-slate-700 block">
+                    Active Categories in Loading Screen Rotation
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { id: 'Website Tip', label: 'Website Tips & Tricks', icon: '💡', desc: 'Short navigation shortcuts and tool highlights' },
+                      { id: 'SDG Fact', label: 'SDG Facts & Targets', icon: '🌱', desc: 'UN 2030 quantitative goals and key milestones' },
+                      { id: 'UN Trivia', label: 'United Nations Trivia', icon: '🇺🇳', desc: 'Treaties, member states, and historical facts' }
+                    ].map(cat => (
+                      <label
+                        key={cat.id}
+                        className={`flex items-start gap-3 p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                          triviaAllowedCategories.includes(cat.id)
+                            ? 'bg-white border-teal-300 shadow-xs'
+                            : 'bg-slate-100/60 border-slate-200 text-slate-400'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={triviaAllowedCategories.includes(cat.id)}
+                          onChange={() => handleToggleAllowedCategory(cat.id)}
+                          className="mt-0.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 w-4 h-4 cursor-pointer"
+                        />
+                        <div className="min-w-0">
+                          <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                            <span>{cat.icon}</span>
+                            <span>{cat.label}</span>
+                          </span>
+                          <span className="text-[11px] text-slate-500 block">{cat.desc}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Interactive Preview Box (Toggleable) */}
+              {showLiveTimingPreview && (
+                <div className="pt-2 border-t border-slate-100 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Live Loading Card Preview (Rotating every {triviaInterval}s)</span>
+                    </span>
+                    <span className="text-[11px] text-teal-700 font-medium">Real-time simulation</span>
+                  </div>
+                  <div className="max-w-xl mx-auto rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                    <LoadingTriviaCard 
+                      isScoped={false}
+                      customInterval={triviaInterval}
+                      overrideTriviaList={filteredTrivia.length > 0 ? filteredTrivia : null}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Trivia Items List / Cards */}
+            <div className="space-y-3">
+              {triviaLoading && triviaList.length === 0 ? (
+                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center space-y-3">
+                  <Loader2 className="w-6 h-6 animate-spin text-rose-600 mx-auto" />
+                  <p className="text-xs text-slate-500">Loading tips & trivia items from Turso...</p>
+                </div>
+              ) : filteredTrivia.length === 0 ? (
+                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center space-y-3">
+                  <Lightbulb className="w-8 h-8 text-amber-400 mx-auto" />
+                  <div className="text-sm font-semibold text-slate-700">No matching tips or trivia found</div>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    {triviaSearch || triviaFilter !== 'ALL'
+                      ? 'Try clearing your search term or selecting another category filter.'
+                      : 'There are no items in the database yet. Click "Add New Tip / Trivia" above to create one.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {filteredTrivia.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`bg-white border rounded-xl p-4 transition-all duration-200 hover:shadow-md flex flex-col justify-between gap-3 ${
+                        item.is_active ? 'border-slate-200' : 'border-slate-200/60 opacity-60 bg-slate-50/50'
+                      }`}
+                    >
+                      {/* Top Row: Icon + Badge + Active Switch */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-200/60 flex items-center justify-center text-lg shadow-xs flex-shrink-0">
+                            {item.icon || '💡'}
+                          </div>
+                          <div>
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getTriviaCategoryBadge(item.category)}`}>
+                              {item.category}
+                            </span>
+                            <span className="ml-2 text-[10px] font-mono text-slate-400">#{item.id}</span>
+                          </div>
+                        </div>
+
+                        {/* Status Toggle Badge */}
+                        <button
+                          onClick={() => handleToggleTriviaActive(item)}
+                          title={item.is_active ? 'Click to deactivate' : 'Click to activate'}
+                          className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-all flex items-center gap-1 ${
+                            item.is_active
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${item.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                          <span>{item.is_active ? 'Active' : 'Inactive'}</span>
+                        </button>
+                      </div>
+
+                      {/* Content Text */}
+                      <p className="text-xs text-slate-700 leading-relaxed font-normal flex-1">
+                        "{item.text}"
+                      </p>
+
+                      {/* Card Footer Actions */}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+                        <span>{item.created_at ? new Date(item.created_at).toLocaleDateString() : 'System Seed'}</span>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            onClick={() => handleOpenEditTrivia(item)}
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-slate-600 hover:text-navy hover:bg-slate-100"
+                          >
+                            <Edit2 className="w-3 h-3 mr-1" />
+                            <span>Edit</span>
+                          </Button>
+                          <Button
+                            onClick={() => handleDeleteTriviaItem(item.id)}
+                            variant="ghost"
+                            size="sm"
+                            disabled={deletingTriviaId === item.id}
+                            className="h-7 px-2 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                          >
+                            {deletingTriviaId === item.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <>
+                                <Trash2 className="w-3 h-3 mr-1" />
+                                <span>Delete</span>
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Dialog for Add / Edit */}
+            {isTriviaModalOpen && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 animate-in zoom-in-95 duration-200">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h4 className="text-base font-semibold text-warm-gray flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                      <span>{editingTriviaItem ? 'Edit Tip / Trivia Item' : 'Add New Tip / Trivia Item'}</span>
+                    </h4>
+                    <button
+                      onClick={() => setIsTriviaModalOpen(false)}
+                      className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveTriviaItem} className="space-y-4">
+                    {/* Category Selection */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700">Message Category</label>
+                      <Select value={triviaFormCategory} onValueChange={setTriviaFormCategory}>
+                        <SelectTrigger className="h-9 text-xs bg-white border-slate-200">
+                          <SelectValue placeholder="Select Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Website Tip" className="text-xs">
+                            💡 Website Tip (Navigation, keyboard shortcuts, features)
+                          </SelectItem>
+                          <SelectItem value="SDG Fact" className="text-xs">
+                            🌱 SDG Fact (Sustainable Development Goals context & targets)
+                          </SelectItem>
+                          <SelectItem value="UN Trivia" className="text-xs">
+                            🇺🇳 UN Trivia (United Nations history, member states & treaties)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Icon Selection & Presets */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                        <span>Display Emoji / Icon</span>
+                        <span className="text-[11px] font-normal text-slate-400">Click a preset or enter any emoji</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          value={triviaFormIcon}
+                          onChange={(e) => setTriviaFormIcon(e.target.value)}
+                          maxLength={4}
+                          className="w-16 h-9 text-center text-lg bg-white border-slate-200"
+                        />
+                        <div className="flex items-center gap-1 flex-wrap flex-1">
+                          {TRIVIA_EMOJI_PRESETS.map((emoji) => (
+                            <button
+                              type="button"
+                              key={emoji}
+                              onClick={() => setTriviaFormIcon(emoji)}
+                              className={`w-8 h-8 rounded-md text-sm transition-all border ${
+                                triviaFormIcon === emoji
+                                  ? 'bg-amber-100 border-amber-300 scale-105'
+                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Text Area */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                        <span>Message Text</span>
+                        <span className={`text-[11px] ${triviaFormText.length > 180 ? 'text-amber-600 font-semibold' : 'text-slate-400'}`}>
+                          {triviaFormText.length}/200 chars
+                        </span>
+                      </label>
+                      <textarea
+                        value={triviaFormText}
+                        onChange={(e) => setTriviaFormText(e.target.value)}
+                        required
+                        maxLength={220}
+                        rows={3}
+                        placeholder="e.g. SDG 13 focuses on Climate Action with national mitigation commitments."
+                        className="w-full text-xs p-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent resize-none font-sans"
+                      />
+                      <p className="text-[11px] text-slate-400">
+                        Short, punchy 1-2 sentence messages work best for quick reading while loading.
+                      </p>
+                    </div>
+
+                    {/* Active Checkbox */}
+                    <div className="pt-1">
+                      <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={triviaFormActive}
+                          onChange={(e) => setTriviaFormActive(e.target.checked)}
+                          className="rounded border-slate-300 text-rose-600 focus:ring-rose-500 w-4 h-4"
+                        />
+                        <span>Active in loading screen rotation immediately</span>
+                      </label>
+                    </div>
+
+                    {/* Modal Actions */}
+                    <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsTriviaModalOpen(false)}
+                        className="text-xs h-9 border-slate-200 text-slate-600"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={isSavingTrivia || !triviaFormText.trim()}
+                        className="text-xs h-9 bg-rose-600 hover:bg-rose-700 text-white font-medium shadow-sm transition-all"
+                      >
+                        {isSavingTrivia ? (
+                          <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Saving...</>
+                        ) : (
+                          <><Save className="w-3.5 h-3.5 mr-1.5" /> Save Item</>
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
 
           </div>
         )}

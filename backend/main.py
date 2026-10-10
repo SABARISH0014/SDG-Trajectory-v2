@@ -33,7 +33,14 @@ from database import (
     log_admin_action,
     get_admin_audit_logs,
     clear_admin_audit_logs,
-    get_goal_status_data
+    get_goal_status_data,
+    get_active_trivia,
+    get_all_trivia,
+    add_trivia_item,
+    update_trivia_item,
+    delete_trivia_item,
+    get_loading_screen_config,
+    set_loading_screen_config
 )
 from forecasting import train_and_predict, calculate_core_trajectory
 from auth import create_access_token, verify_token, verify_password, get_password_hash
@@ -307,7 +314,7 @@ class AIConfigRequest(BaseModel):
 
 @app.get("/api/admin/ai-config")
 async def get_ai_config(token: str = Depends(verify_token)):
-    model = await get_system_config_str("copilot_model", "google/gemma-4-26b-a4b-it:free")
+    model = await get_system_config_str("copilot_model", "openrouter/auto")
     persona = await get_system_config_str("copilot_persona", "un_advisor")
     temperature = await get_system_config("copilot_temperature", 0.2)
     mock_mode = bool(await get_system_config("emergency_mock_mode", 0.0))
@@ -329,6 +336,62 @@ async def update_ai_config(req: AIConfigRequest, token: str = Depends(verify_tok
         f"Updated Copilot parameters: Model={req.copilot_model}, Persona={req.copilot_persona}, Temp={req.copilot_temperature:.2f}, MockMode={req.emergency_mock_mode}"
     )
     return {"message": "AI Copilot & System configuration updated successfully."}
+
+class TriviaRequest(BaseModel):
+    category: str = Field(..., min_length=2)
+    text: str = Field(..., min_length=5)
+    icon: Optional[str] = Field("Sparkles")
+    is_active: Optional[int] = Field(1)
+
+class LoadingConfigReq(BaseModel):
+    rotation_interval: float = Field(..., ge=2.0, le=15.0)
+    active_categories: List[str] = Field(default_factory=list)
+    spinner_style: Optional[str] = Field("sdg_ring")
+
+@app.get("/api/trivia")
+async def get_trivia_list():
+    """Retrieve all active trivia and tips for loading states and user engagement."""
+    return await get_active_trivia()
+
+@app.get("/api/trivia/config")
+async def get_trivia_config():
+    """Retrieve runtime loading screen timing and display options."""
+    return await get_loading_screen_config()
+
+@app.get("/api/admin/trivia")
+async def get_admin_trivia_list(token: str = Depends(verify_token)):
+    """Retrieve all trivia items (active and inactive) for admin management."""
+    items = await get_all_trivia()
+    return {"trivia": items, "items": items}
+
+@app.post("/api/admin/trivia/config")
+async def update_trivia_config(req: LoadingConfigReq, token: str = Depends(verify_token)):
+    """Update runtime loading screen rotation interval and allowed categories."""
+    await set_loading_screen_config(req.rotation_interval, req.active_categories, req.spinner_style or "sdg_ring")
+    await log_admin_action("TRIVIA_CONFIG_UPDATE", f"Updated loading screen interval to {req.rotation_interval}s and categories: {req.active_categories}")
+    return {"message": "Loading screen configuration updated successfully"}
+
+@app.post("/api/admin/trivia")
+async def create_trivia(req: TriviaRequest, token: str = Depends(verify_token)):
+    item = await add_trivia_item(req.category, req.text, req.icon or "Sparkles")
+    await log_admin_action("TRIVIA_CREATE", f"Added trivia item under {req.category}: {req.text[:30]}...")
+    return item
+
+@app.put("/api/admin/trivia/{item_id}")
+async def edit_trivia(item_id: int, req: TriviaRequest, token: str = Depends(verify_token)):
+    success = await update_trivia_item(item_id, req.category, req.text, req.icon or "Sparkles", req.is_active if req.is_active is not None else 1)
+    if not success:
+        raise HTTPException(status_code=404, detail="Trivia item not found or update failed")
+    await log_admin_action("TRIVIA_UPDATE", f"Updated trivia item {item_id}")
+    return {"message": "Trivia item updated successfully"}
+
+@app.delete("/api/admin/trivia/{item_id}")
+async def remove_trivia(item_id: int, token: str = Depends(verify_token)):
+    success = await delete_trivia_item(item_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Trivia item not found or delete failed")
+    await log_admin_action("TRIVIA_DELETE", f"Deleted trivia item {item_id}")
+    return {"message": "Trivia item deleted successfully"}
 
 # Pydantic Schemas
 class PredictionResponse(BaseModel):
@@ -547,6 +610,7 @@ async def get_globe_goal_status(
 async def copilot_chat(request: Request, body: CopilotRequest):
     """
     Proxy endpoint for SDG Policy Copilot to securely contact OpenRouter without exposing the API key on the client.
+    Features automated multi-model sequential fallbacks and resilience against provider-level 429 rate limits.
     """
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
@@ -554,12 +618,25 @@ async def copilot_chat(request: Request, body: CopilotRequest):
         raise HTTPException(status_code=500, detail="API key is missing on the server.")
 
     try:
-        active_model = await get_system_config_str("copilot_model", "google/gemma-4-26b-a4b-it:free")
+        active_model = await get_system_config_str("copilot_model", "openrouter/auto")
         active_persona = await get_system_config_str("copilot_persona", "un_advisor")
         active_temperature = await get_system_config("copilot_temperature", 0.2)
+        mock_mode = bool(await get_system_config("emergency_mock_mode", 0.0))
 
         persona_prompt = COPILOT_PERSONAS.get(active_persona, COPILOT_PERSONAS["un_advisor"])
         
+        # Emergency Mock Mode
+        if mock_mode:
+            return {
+                "role": "assistant",
+                "content": (
+                    "**[Offline Mode Active]** Here are foundational policy insights aligned with the 2030 Agenda:\n\n"
+                    "• **Priority 1: Targeted Public Investment:** Channel resources directly into frontline delivery systems and community-led operations.\n"
+                    "• **Priority 2: Regulatory & Institutional Frameworks:** Align municipal bylaws with national SDG milestones and ensure fiscal accountability.\n"
+                    "• **Priority 3: Data-Driven Resource Allocation:** Leverage empirical time-series monitoring to address regional disparities."
+                )
+            }
+
         # Prepend configured system persona prompt if not present
         messages_payload = []
         has_system = any(m.role == "system" for m in body.messages)
@@ -567,49 +644,78 @@ async def copilot_chat(request: Request, body: CopilotRequest):
             messages_payload.append({"role": "system", "content": persona_prompt})
         messages_payload.extend([msg.model_dump() for msg in body.messages])
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "http://localhost:5173", # Keep same for rate limiting safety
-                    "X-Title": "SDG Trajectory Forecaster"
-                },
-                json={
-                    "model": active_model,
-                    "models": [
-                        active_model,
-                        "google/gemma-4-26b-a4b-it:free",
-                        "poolside/laguna-s-2.1:free",
-                        "inclusionai/ling-3.0-flash-fin:free"
-                    ],
-                    "temperature": active_temperature,
-                    "messages": messages_payload
-                }
-            )
-            response.raise_for_status()
-            data = response.json()
-            if "choices" in data and isinstance(data["choices"], list) and len(data["choices"]) > 0:
-                choice = data["choices"][0]
-                if "message" in choice:
-                    return choice["message"]
-            
-            # Handle upstream error payload if present
-            if "error" in data:
-                err_msg = data["error"].get("message", "Upstream AI provider error")
-                logger.error(f"OpenRouter upstream payload error: {err_msg}")
-                raise HTTPException(status_code=502, detail=f"AI Service Error: {err_msg}")
+        # Priority list of models to try in sequence to survive rate limits and model outages
+        candidate_pool = [
+            active_model,
+            "openrouter/auto",
+            "deepseek/deepseek-chat",
+            "nvidia/nemotron-3.5-lightning:free",
+            "liquid/lfm-2.5-2.6b:free",
+            "google/gemma-4-26b-a4b-it:free"
+        ]
+        models_to_try = list(dict.fromkeys(m for m in candidate_pool if m))
 
-            logger.error(f"OpenRouter unexpected payload format: {data}")
-            raise HTTPException(status_code=502, detail="Invalid response structure received from AI service.")
-    except HTTPException:
-        raise
-    except httpx.HTTPStatusError as e:
-        logger.error(f"OpenRouter HTTP Error: {e.response.text}")
-        raise HTTPException(status_code=e.response.status_code, detail=f"AI Service Error: {e.response.text}")
+        last_error_detail = None
+        for candidate in models_to_try:
+            try:
+                # Include other candidates as OpenRouter models fallback list (up to 3 total)
+                other_fallbacks = [m for m in models_to_try if m != candidate][:2]
+                models_array = [candidate] + other_fallbacks
+
+                async with httpx.AsyncClient(timeout=25.0) as client:
+                    response = await client.post(
+                        url="https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "http://localhost:5173",
+                            "X-Title": "SDG Trajectory Forecaster"
+                        },
+                        json={
+                            "model": candidate,
+                            "models": models_array,
+                            "temperature": active_temperature,
+                            "messages": messages_payload
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if "choices" in data and isinstance(data["choices"], list) and len(data["choices"]) > 0:
+                            choice = data["choices"][0]
+                            if "message" in choice:
+                                return choice["message"]
+                    
+                    # Parse error cleanly
+                    try:
+                        err_json = response.json()
+                        err_msg = err_json.get("error", {}).get("message", response.text)
+                    except Exception:
+                        err_msg = response.text
+                    
+                    last_error_detail = err_msg
+                    logger.warning(f"Copilot model '{candidate}' returned {response.status_code}: {err_msg}. Attempting next fallback model...")
+                    continue
+            except (httpx.TimeoutException, httpx.RequestError) as net_err:
+                last_error_detail = str(net_err)
+                logger.warning(f"Copilot network error for '{candidate}': {net_err}. Attempting next fallback model...")
+                continue
+
+        # If all candidates fail due to upstream rate limits or outages, return high-value synthesized response
+        logger.error(f"All Copilot models exhausted. Last error: {last_error_detail}")
+        return {
+            "role": "assistant",
+            "content": (
+                "**Policy Advisory Briefing:** Upstream public LLM providers are currently experiencing temporary rate limits. "
+                "Here are strategic recommendations derived from global SDG benchmark standards:\n\n"
+                "• **1. Target Frontline Delivery Systems:** Prioritize capital and recurrent budgets for community infrastructure, operation & maintenance, and service delivery.\n"
+                "• **2. Mobilize Blended Public-Private Financing:** Leverage sovereign guarantees and concessional development loans to crowd in commercial capital.\n"
+                "• **3. Institutionalize Sub-national Monitoring:** Establish high-frequency indicator audits to detect bottlenecks before target deadlines.\n\n"
+                "*(Please retry your query in a few moments once upstream provider rate limits reset.)*"
+            )
+        }
     except Exception as e:
-        logger.error(f"OpenRouter Request failed: {e}")
+        logger.error(f"OpenRouter unexpected failure: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

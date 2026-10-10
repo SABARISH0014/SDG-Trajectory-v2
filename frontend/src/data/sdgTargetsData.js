@@ -240,52 +240,204 @@ export const UN_BENCHMARKS = {
   '1.1': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
   '1.2': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
   '1.3': { value: 100.0, label: 'UN 2030 Target: 100%' },
-  '1.4': { value: 100.0, label: 'UN 2030 Target: 100' },
+  '1.4': { value: 100.0, label: 'UN 2030 Target: 100 Index' },
+  '1.5': { value: 0.0, label: 'UN 2030 Target: 0 per 100k' },
+  '1.a': { value: 0.7, label: 'UN 2030 Target: ≥ 0.7% GDP' },
+  '1.b': { value: 25.0, label: 'UN 2030 Target: ≥ 25% Pro-Poor' },
+
   // Goal 2: Zero hunger
   '2.1': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
   '2.2': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '2.3': { value: 100.0, label: 'UN 2030 Target: 100 Index' },
+  '2.4': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '2.5': { value: 100.0, label: 'UN 2030 Target: 100 Index' },
+  '2.a': { value: 1.0, label: 'UN 2030 Target: ≥ 1.0 AOI' },
+  '2.b': { value: 0.0, label: 'UN 2030 Target: $0 Subsidies' },
+  '2.c': { value: 0.0, label: 'UN 2030 Target: Low Volatility' },
+
   // Goal 3: Good health
   '3.1': { value: 70.0, label: 'UN 2030 Target: < 70 per 100k' },
   '3.2': { value: 25.0, label: 'UN 2030 Target: ≤ 25 per 1,000' },
-  '3.6': { value: 5.0, label: 'UN 2030 Target: Low mortality' },
+  '3.3': { value: 0.0, label: 'UN 2030 Target: 0 Epidemics' },
+  '3.4': { value: 10.0, label: 'UN 2030 Target: ≤ 10%' },
+  '3.5': { value: 100.0, label: 'UN 2030 Target: 100% Treatment' },
+  '3.6': { value: 5.0, label: 'UN 2030 Target: ≤ 5 per 100k' },
+  '3.7': { value: 100.0, label: 'UN 2030 Target: 100% Coverage' },
   '3.8': { value: 80.0, label: 'UN 2030 Target: ≥ 80 Index' },
+  '3.9': { value: 0.0, label: 'UN 2030 Target: 0 per 100k' },
+  '3.a': { value: 15.0, label: 'UN 2030 Target: ≤ 15%' },
+  '3.b': { value: 95.0, label: 'UN 2030 Target: ≥ 95%' },
+  '3.c': { value: 44.5, label: 'WHO Benchmark: ≥ 44.5 per 10k' },
+  '3.d': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+
   // Goal 4: Quality education
   '4.1': { value: 100.0, label: 'UN 2030 Target: 100%' },
   '4.2': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '4.3': { value: 75.0, label: 'UN 2030 Target: ≥ 75%' },
+  '4.4': { value: 80.0, label: 'UN 2030 Target: ≥ 80%' },
+  '4.5': { value: 1.0, label: 'UN 2030 Target: 1.0 Parity' },
   '4.6': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '4.7': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '4.a': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '4.b': { value: 500.0, label: 'UN 2030 Target: $500M Aid' },
+  '4.c': { value: 100.0, label: 'UN 2030 Target: 100%' },
+
   // Goal 5: Gender equality
   '5.1': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
   '5.2': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
   '5.3': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '5.4': { value: 10.0, label: 'UN 2030 Target: ≤ 10%' },
   '5.5': { value: 50.0, label: 'UN 2030 Target: 50% Parity' },
+  '5.6': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '5.a': { value: 50.0, label: 'UN 2030 Target: ≥ 50%' },
+  '5.b': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '5.c': { value: 100.0, label: 'UN 2030 Target: 100%' },
+
   // Goal 6: Clean water
   '6.1': { value: 100.0, label: 'UN 2030 Target: 100%' },
   '6.2': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '6.3': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '6.4': { value: 25.0, label: 'UN 2030 Target: ≤ 25%' },
+  '6.5': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '6.6': { value: 10.0, label: 'UN 2030 Target: +10%' },
+  '6.a': { value: 1000.0, label: 'UN 2030 Target: $1B Aid' },
+  '6.b': { value: 100.0, label: 'UN 2030 Target: 100%' },
+
   // Goal 7: Clean energy
   '7.1': { value: 100.0, label: 'UN 2030 Target: 100%' },
   '7.2': { value: 60.0, label: 'UN 2030 Benchmark: ≥ 60%' },
+  '7.3': { value: 2.5, label: 'UN 2030 Target: ≤ 2.5 MJ/USD' },
+  '7.a': { value: 5000.0, label: 'UN 2030 Target: $5B Clean Flows' },
+  '7.b': { value: 500.0, label: 'UN 2030 Target: ≥ 500 W/cap' },
+
   // Goal 8: Decent work
+  '8.1': { value: 7.0, label: 'UN 2030 Target: ≥ 7.0%' },
+  '8.2': { value: 4.0, label: 'UN 2030 Target: ≥ 4.0%' },
+  '8.3': { value: 20.0, label: 'UN 2030 Target: ≤ 20%' },
+  '8.4': { value: 5.0, label: 'UN 2030 Target: ≤ 5.0 kg/USD' },
   '8.5': { value: 3.5, label: 'UN 2030 Benchmark: ≤ 3.5%' },
+  '8.6': { value: 5.0, label: 'UN 2030 Target: ≤ 5.0%' },
   '8.7': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '8.8': { value: 0.0, label: 'UN 2030 Target: 0 Fatalities' },
+  '8.9': { value: 10.0, label: 'UN 2030 Target: ≥ 10%' },
   '8.10': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '8.a': { value: 500.0, label: 'UN 2030 Target: $500M Aid' },
+  '8.b': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+
   // Goal 9: Industry & Innovation
+  '9.1': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '9.2': { value: 25.0, label: 'UN 2030 Target: ≥ 25%' },
+  '9.3': { value: 60.0, label: 'UN 2030 Target: ≥ 60%' },
+  '9.4': { value: 0.1, label: 'UN 2030 Target: ≤ 0.1 kg CO2/USD' },
+  '9.5': { value: 3.0, label: 'UN 2030 Target: ≥ 3.0% GDP' },
+  '9.a': { value: 1000.0, label: 'UN 2030 Target: $1B Support' },
+  '9.b': { value: 60.0, label: 'UN 2030 Target: ≥ 60%' },
   '9.c': { value: 100.0, label: 'UN 2030 Target: 100% 4G/5G' },
+
   // Goal 10: Reduced inequalities
-  '10.2': { value: 0.0, label: 'UN 2030 Target: Minimal' },
+  '10.1': { value: 2.0, label: 'UN 2030 Target: ≥ +2.0%' },
+  '10.2': { value: 0.0, label: 'UN 2030 Target: Minimal (0%)' },
+  '10.3': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '10.4': { value: 60.0, label: 'UN 2030 Target: ≥ 60%' },
+  '10.5': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '10.6': { value: 50.0, label: 'UN 2030 Target: 50%' },
+  '10.7': { value: 0.0, label: 'UN 2030 Target: 0.0 Months' },
+  '10.a': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '10.b': { value: 2000.0, label: 'UN 2030 Target: $2B Aid/FDI' },
+  '10.c': { value: 3.0, label: 'UN 2030 Target: ≤ 3.0%' },
+
   // Goal 11: Sustainable cities
   '11.1': { value: 0.0, label: 'UN 2030 Target: 0.0% Slums' },
+  '11.2': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '11.3': { value: 1.0, label: 'UN 2030 Target: ≤ 1.0 Ratio' },
+  '11.4': { value: 100.0, label: 'UN 2030 Target: $100/capita' },
+  '11.5': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
   '11.6': { value: 10.0, label: 'WHO Air Limit: ≤ 10 µg/m³' },
+  '11.7': { value: 30.0, label: 'UN 2030 Target: ≥ 30%' },
+  '11.a': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '11.b': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '11.c': { value: 100.0, label: 'UN 2030 Target: 100 Index' },
+
+  // Goal 12: Responsible consumption & production
+  '12.1': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '12.2': { value: 5.0, label: 'UN 2030 Target: ≤ 5.0 t/cap' },
+  '12.3': { value: 0.0, label: 'UN 2030 Target: Halve Waste (0%)' },
+  '12.4': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '12.5': { value: 70.0, label: 'UN 2030 Target: ≥ 70%' },
+  '12.6': { value: 500.0, label: 'UN 2030 Target: 500+ Reports' },
+  '12.7': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '12.8': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '12.a': { value: 500.0, label: 'UN 2030 Target: 500 W/cap' },
+  '12.b': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '12.c': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+
   // Goal 13: Climate action
+  '13.1': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
   '13.2': { value: 2.0, label: 'Paris Net-Zero Path: ≤ 2.0 t/cap' },
+  '13.3': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '13.a': { value: 100.0, label: 'UN 2030 Target: $100B Mobilized' },
+  '13.b': { value: 100.0, label: 'UN 2030 Target: 100 Plans' },
+
   // Goal 14: Life below water
+  '14.1': { value: 0.0, label: 'UN 2030 Target: 0 Debris' },
+  '14.2': { value: 30.0, label: 'UN 2030 Target: ≥ 30%' },
+  '14.3': { value: 8.2, label: 'UN 2030 Target: ≥ 8.2 pH' },
+  '14.4': { value: 100.0, label: 'UN 2030 Target: 100%' },
   '14.5': { value: 10.0, label: 'UN 2030 Target: ≥ 10% MPAs' },
+  '14.6': { value: 5.0, label: 'UN 2030 Target: 5.0 Score' },
+  '14.7': { value: 15.0, label: 'UN 2030 Target: ≥ 15%' },
+  '14.a': { value: 10.0, label: 'UN 2030 Target: ≥ 10%' },
+  '14.b': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '14.c': { value: 100.0, label: 'UN 2030 Target: 100%' },
+
   // Goal 15: Life on land
   '15.1': { value: 35.0, label: 'Global Green Target: ≥ 35%' },
+  '15.2': { value: 2.0, label: 'UN 2030 Target: ≥ +2.0%' },
+  '15.3': { value: 0.0, label: 'UN 2030 Target: 0.0% Degraded' },
+  '15.4': { value: 100.0, label: 'UN 2030 Target: 100 Index' },
+  '15.5': { value: 1.0, label: 'UN 2030 Target: 1.0 Index' },
+  '15.6': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '15.7': { value: 0.0, label: 'UN 2030 Target: 0 Poached Trade' },
+  '15.8': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '15.9': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '15.a': { value: 1000.0, label: 'UN 2030 Target: $1B Aid' },
+  '15.b': { value: 500.0, label: 'UN 2030 Target: $500M Forestry' },
+  '15.c': { value: 50000.0, label: 'UN 2030 Target: 50k Jobs' },
+
   // Goal 16: Peace & Justice
   '16.1': { value: 0.0, label: 'UN 2030 Target: Low Violence' },
+  '16.2': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '16.3': { value: 10.0, label: 'UN 2030 Target: ≤ 10%' },
+  '16.4': { value: 0.0, label: 'UN 2030 Target: $0 Illicit Outflows' },
+  '16.5': { value: 0.0, label: 'UN 2030 Target: 0.0%' },
+  '16.6': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '16.7': { value: 85.0, label: 'UN 2030 Target: ≥ 85%' },
+  '16.8': { value: 50.0, label: 'UN 2030 Target: 50%' },
   '16.9': { value: 100.0, label: 'UN 2030 Target: 100% Birth Reg.' },
+  '16.10': { value: 0.0, label: 'UN 2030 Target: 0 Attacks' },
+  '16.a': { value: 100.0, label: 'UN 2030 Target: Grade A Institution' },
+  '16.b': { value: 100.0, label: 'UN 2030 Target: 100%' },
+
   // Goal 17: Partnerships
+  '17.1': { value: 25.0, label: 'UN 2030 Target: ≥ 25%' },
+  '17.2': { value: 0.7, label: 'UN 2030 Target: 0.7% GNI' },
+  '17.3': { value: 50.0, label: 'UN 2030 Target: $50B FDI' },
+  '17.4': { value: 10.0, label: 'UN 2030 Target: ≤ 10%' },
+  '17.5': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '17.6': { value: 50.0, label: 'UN 2030 Target: ≥ 50 / 100' },
+  '17.7': { value: 1000.0, label: 'UN 2030 Target: $1B Funds' },
   '17.8': { value: 100.0, label: 'UN 2030 Target: 100% Internet' },
+  '17.9': { value: 500.0, label: 'UN 2030 Target: $500M Aid' },
+  '17.10': { value: 2.0, label: 'UN 2030 Target: ≤ 2.0%' },
+  '17.11': { value: 30.0, label: 'UN 2030 Target: ≥ 30%' },
+  '17.12': { value: 0.0, label: 'UN 2030 Target: 0.0% Tariffs' },
+  '17.13': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '17.14': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '17.15': { value: 100.0, label: 'UN 2030 Target: 100%' },
+  '17.16': { value: 100.0, label: 'UN 2030 Target: 100+' },
+  '17.17': { value: 100.0, label: 'UN 2030 Target: $100B' },
+  '17.18': { value: 100.0, label: 'UN 2030 Target: 100 Score' },
+  '17.19': { value: 100.0, label: 'UN 2030 Target: 100%' },
 };
 
 /**
@@ -297,6 +449,10 @@ export function getTargetDetails(targetCode, goalNumber = null) {
 
   if (ALL_SDG_TARGETS[targetCode]) {
     const data = ALL_SDG_TARGETS[targetCode];
+    const isLower = data.polarity === 'lower_is_better';
+    const defaultVal = isLower ? 0.0 : (data.unit?.includes('%') || data.unit?.includes('Index') || data.unit?.includes('Score') ? 100.0 : 50.0);
+    const defaultLbl = isLower ? 'UN 2030 Target: 0.0' : 'UN 2030 Target: 100.0';
+
     return {
       code: targetCode,
       goalNumber: goalNum,
@@ -306,8 +462,8 @@ export function getTargetDetails(targetCode, goalNumber = null) {
       unit: data.unit,
       polarity: data.polarity,
       impactOnGoal: data.impact,
-      benchmarkValue: benchmark ? benchmark.value : null,
-      benchmarkLabel: benchmark ? benchmark.label : null,
+      benchmarkValue: benchmark ? benchmark.value : defaultVal,
+      benchmarkLabel: benchmark ? benchmark.label : defaultLbl,
     };
   }
 
@@ -324,8 +480,8 @@ export function getTargetDetails(targetCode, goalNumber = null) {
     impactOnGoal: isLowerBetter
       ? `Reducing this indicator directly advances Goal ${goalNum} by eliminating critical systemic bottlenecks and protecting vulnerable populations.`
       : `Expanding this indicator serves as a positive catalyst for Goal ${goalNum}, enhancing public infrastructure and community resilience.`,
-    benchmarkValue: benchmark ? benchmark.value : null,
-    benchmarkLabel: benchmark ? benchmark.label : null,
+    benchmarkValue: benchmark ? benchmark.value : (isLowerBetter ? 0.0 : 100.0),
+    benchmarkLabel: benchmark ? benchmark.label : (isLowerBetter ? 'UN 2030 Target: 0.0' : 'UN 2030 Target: 100.0'),
   };
 }
 

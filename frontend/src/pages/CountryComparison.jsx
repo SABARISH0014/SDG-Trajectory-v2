@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { TARGETS, COUNTRIES } from '../lib/constants';
 import SplashScreenOverlay from '../components/SplashScreenOverlay';
+import LoadingTriviaCard from '../components/LoadingTriviaCard';
 import { Skeleton } from '../components/ui/Skeleton';
 import { getTargetDetails, formatMetricValue } from '../data/sdgTargetsData';
 import GlobeView from '../components/GlobeView';
@@ -247,13 +248,6 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
     setLoading(false);
   };
 
-  // Auto-run comparison on load if standalone
-  useEffect(() => {
-    if (!isEmbedded && !dataA && !dataB) {
-      handleCompare();
-    }
-  }, []);
-
   // Compute comparative analysis findings
   const comparativeInsights = useMemo(() => {
     if (!dataA || !dataB || dataA.error || dataB.error) return null;
@@ -321,9 +315,6 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className="font-bold text-warm-gray text-lg">{title}</h4>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                {targetInfo.unit}
-              </span>
               <Link to={`/country/${countryCode}`} className="text-[11px] text-teal-600 hover:underline font-medium">
                 (Profile)
               </Link>
@@ -333,6 +324,22 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
           <Badge variant={getBadgeVariant(data.status)} className="px-3 py-1 text-xs font-semibold">{data.status}</Badge>
         </div>
         
+        {/* Axes units indicator */}
+        <div className="flex items-center justify-between text-xs text-slate-500 mb-2 px-1">
+          <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200/80 px-2.5 py-0.5 rounded text-slate-700 font-medium text-[11px] flex-wrap">
+            <div className="flex items-center gap-1">
+              <span className="text-slate-400 font-semibold uppercase text-[9px] tracking-wider">X-Axis Unit:</span>
+              <span className="font-bold text-navy">Year</span>
+            </div>
+            <span className="text-slate-300">|</span>
+            <div className="flex items-center gap-1">
+              <span className="text-slate-400 font-semibold uppercase text-[9px] tracking-wider">Y-Axis Unit:</span>
+              <span className="font-bold text-navy">{targetInfo.unit || 'Score / Rate'}</span>
+            </div>
+          </div>
+          <span className="text-[10px] text-slate-400">Projection to 2030</span>
+        </div>
+
         <div className="flex-1 min-h-0 h-[380px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data.chartData} margin={{ top: 15, right: 20, left: 15, bottom: 20 }}>
@@ -354,21 +361,28 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
                   dataMin => (dataMin >= 0 ? Math.max(0, dataMin - (dataMin * 0.05)) : dataMin - (Math.abs(dataMin) * 0.05)),
                   dataMax => dataMax + (Math.abs(dataMax) * 0.05)
                 ]}
-                width={75}
+                width={80}
+                label={{ 
+                  value: targetInfo.unit || 'Score / Rate', 
+                  angle: -90, 
+                  position: 'insideLeft', 
+                  offset: 0,
+                  style: { textAnchor: 'middle', fill: '#475569', fontSize: 11, fontWeight: 600 } 
+                }}
               />
               <Tooltip content={<CustomTooltip unit={targetInfo.unit} />} />
               <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
               <Line name="Historical Data" type="monotone" dataKey="actualValue" stroke={color} strokeWidth={2.5} connectNulls={true} dot={{ r: 3.5 }} />
               <Line name="Statistical Forecast (2030)" type="monotone" dataKey="predictedValue" stroke={color} strokeWidth={2.5} strokeDasharray="4 4" connectNulls={true} dot={{ r: 3.5 }} />
               
-              {targetInfo.benchmarkValue !== null && (
+              {targetInfo.benchmarkValue !== null && targetInfo.benchmarkValue !== undefined && (
                 <ReferenceLine 
                   y={targetInfo.benchmarkValue} 
                   stroke="#e11d48" 
                   strokeDasharray="4 4" 
                   strokeWidth={1.5}
                   label={{ 
-                    value: targetInfo.benchmarkLabel || 'UN 2030 Benchmark', 
+                    value: targetInfo.benchmarkLabel || 'UN 2030 Target', 
                     fill: '#e11d48', 
                     fontSize: 9, 
                     fontWeight: 700, 
@@ -491,11 +505,13 @@ export default function CountryComparison({ goalNumber, isEmbedded = false }) {
       {/* Side-by-Side Large Comparison Graphs */}
       <div className="flex flex-col md:flex-row gap-6 min-h-[420px]">
         {loading ? (
-          <>
-            <SplashScreenOverlay message="Benchmarking Countries..." />
-            <Skeleton className="flex-1 h-[420px] rounded-lg" />
-            <Skeleton className="flex-1 h-[420px] rounded-lg" />
-          </>
+          <div className="w-full">
+            <LoadingTriviaCard 
+              message={`Benchmarking ${countryAName} vs ${countryBName}...`}
+              submessage={`Comparing historical actuals and 2030 projected milestone gaps on Target ${selectedTarget}`}
+              isScoped={true}
+            />
+          </div>
         ) : (dataA || dataB) ? (
           <>
             {renderDashboard(dataA, countryAName, "#1B2A4A", countryA)}

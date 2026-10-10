@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '@/config';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
@@ -20,7 +20,8 @@ import {
   Scale, 
   Table, 
   LineChart as ChartIcon,
-  Bot 
+  Bot,
+  Clock
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { sdgGoalsContent } from '../data/sdgGoalsContent';
@@ -38,6 +39,8 @@ import GlobeView from '../components/GlobeView';
 import ExportDossierButton from '../components/ExportDossierButton';
 import CopilotDrawer from '../components/CopilotDrawer';
 import SplashScreenOverlay from '../components/SplashScreenOverlay';
+import ForecastPreviewPlaceholder from '../components/ForecastPreviewPlaceholder';
+import LoadingTriviaCard from '../components/LoadingTriviaCard';
 import DataTableTab from '../components/tabs/DataTableTab';
 import html2canvas from 'html2canvas';
 
@@ -260,12 +263,18 @@ export default function GoalPage() {
     }
   };
 
-  // Auto-generate forecast on initial page load if not loaded yet
+  // Reset forecast data when country or target changes so the static preview appears
+  // and forecasting is only executed on-demand when the user clicks "Generate Forecast"
   useEffect(() => {
-    if (!dashboardData && !loading) {
-      handleGenerate();
-    }
+    setDashboardData(null);
   }, [selectedCountry, selectedTarget]);
+
+  const lastUpdatedYear = useMemo(() => {
+    if (!dashboardData?.chart_data) return null;
+    const hist = dashboardData.chart_data.filter(d => d.actualValue !== null && d.actualValue !== undefined);
+    if (hist.length === 0) return null;
+    return hist[hist.length - 1].Year;
+  }, [dashboardData]);
 
   const getBadgeVariant = (status) => {
     if (!status) return "default";
@@ -278,20 +287,27 @@ export default function GoalPage() {
 
   const handleExportCSV = () => {
     if (!dashboardData || !dashboardData.chart_data) return;
-    const headers = ['Year', 'ActualValue', 'PredictedValue'];
-    const csvRows = [headers.join(',')];
+    const unitStr = targetInfo?.unit || 'Value';
+    const headers = ['Year', `Historical_Actual (${unitStr})`, `Statistical_Forecast_2030 (${unitStr})`];
+    const csvRows = [
+      `# SDG Goal ${goalNum} - Target ${selectedTarget}: "${targetInfo.title}"`,
+      `# Country: ${countryName} (${selectedCountry})`,
+      `# Metric: ${targetInfo.indicatorName} | Y-Axis Unit: ${unitStr} | Direction: ${targetInfo.polarity === 'lower_is_better' ? 'Lower is better' : 'Higher is better'}`,
+      `# UN 2030 Benchmark: ${targetInfo.benchmarkLabel || targetInfo.benchmarkValue || 'Standard'}`,
+      headers.join(',')
+    ];
     dashboardData.chart_data.forEach(row => {
       const actual = row.actualValue !== null && row.actualValue !== undefined ? row.actualValue : '';
       const predicted = row.predictedValue !== null && row.predictedValue !== undefined ? row.predictedValue : '';
       csvRows.push(`${row.Year},${actual},${predicted}`);
     });
     const csvString = csvRows.join('\n');
-    const blob = new Blob([csvString], { type: 'text/csv' });
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.setAttribute('hidden', '');
     a.setAttribute('href', url);
-    a.setAttribute('download', `sdg_forecast_${selectedCountry}_${selectedTarget}.csv`);
+    a.setAttribute('download', `sdg_forecast_${selectedCountry}_Target_${selectedTarget}.csv`);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -622,6 +638,20 @@ export default function GoalPage() {
                         </Button>
                       </div>
                     </div>
+
+                    {/* Requirement 4: Last updated year status line */}
+                    <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                        <span>
+                          Official data reporting for <strong className="text-slate-800 font-semibold">{countryName}</strong> (Target <strong className="text-slate-800 font-semibold">{selectedTarget}</strong>):
+                        </span>
+                      </div>
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-navy bg-slate-100 px-3 py-1 rounded-full border border-slate-200 text-xs self-start sm:self-auto">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        {lastUpdatedYear ? `Latest reported data: ${lastUpdatedYear}` : 'Latest reported data: 2024'}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Target Context & Goal Impact Description */}
@@ -652,21 +682,26 @@ export default function GoalPage() {
                     </p>
                   </div>
 
-                  {/* Loading */}
+                  {/* Scoped Loading State with Dynamic SDG Trivia */}
                   {loading && (
-                    <>
-                      <SplashScreenOverlay message="Predicting 2030 Trajectory..." />
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-xl">
-                          <Skeleton className="h-8 w-32 mb-4" />
-                          <Skeleton className="h-[350px] w-full" />
-                        </div>
-                        <div className="space-y-6">
-                          <div className="bg-white border border-slate-200 p-6 rounded-xl"><Skeleton className="h-32 w-full" /></div>
-                          <div className="bg-white border border-slate-200 p-6 rounded-xl"><Skeleton className="h-48 w-full" /></div>
-                        </div>
-                      </div>
-                    </>
+                    <LoadingTriviaCard 
+                      message={`Generating 2030 Trajectory Forecast for ${countryName}...`}
+                      submessage={`Training statistical regression on Target ${selectedTarget} indicator actuals`}
+                      isScoped={true}
+                    />
+                  )}
+
+                  {/* Static Forecast Preview Placeholder (Zero-latency initial state) */}
+                  {!loading && !dashboardData && (
+                    <ForecastPreviewPlaceholder
+                      countryName={countryName}
+                      countryCode={selectedCountry}
+                      targetInfo={targetInfo}
+                      goalColor={goalColor}
+                      goalNumber={goalNum}
+                      onGenerateForecast={handleGenerate}
+                      loading={loading}
+                    />
                   )}
 
                   {/* Results */}
@@ -676,14 +711,9 @@ export default function GoalPage() {
                       <div id="trajectory-chart-container" className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-xl shadow-sm">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-slate-100 gap-2">
                           <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-lg font-serif font-semibold text-warm-gray">
-                                Trajectory Forecast (2015–2030)
-                              </h3>
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                                Y-Axis: {targetInfo.unit}
-                              </span>
-                            </div>
+                            <h3 className="text-lg font-serif font-semibold text-warm-gray">
+                              Trajectory Forecast (2015–2030)
+                            </h3>
                             <p className="text-xs text-slate-500 mt-0.5">
                               Historical actuals with statistical time-series regression projection for {countryName}.
                             </p>
@@ -715,6 +745,24 @@ export default function GoalPage() {
                           </div>
                         </div>
                         
+                        {/* Axes units indicator line above the chart */}
+                        <div className="flex items-center justify-between text-xs text-slate-500 mb-2 px-1">
+                          <div className="inline-flex items-center gap-2.5 bg-slate-50 border border-slate-200/80 px-3 py-1 rounded-md text-slate-700 font-medium flex-wrap">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">X-Axis Unit:</span>
+                              <span className="font-bold text-navy">Year</span>
+                            </div>
+                            <span className="text-slate-300">|</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Y-Axis Unit:</span>
+                              <span className="font-bold text-navy">{targetInfo.unit || 'Score / Rate'}</span>
+                            </div>
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-medium">
+                            Historical Actuals &amp; 2030 Regression Projection
+                          </div>
+                        </div>
+
                         <div className="h-[360px] w-full" ref={chartRef}>
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={dashboardData.chart_data} margin={{ top: 15, right: 20, left: 15, bottom: 20 }}>
@@ -736,7 +784,14 @@ export default function GoalPage() {
                                   dataMin => (dataMin >= 0 ? Math.max(0, dataMin - (dataMin * 0.05)) : dataMin - (Math.abs(dataMin) * 0.05)),
                                   dataMax => dataMax + (Math.abs(dataMax) * 0.05)
                                 ]}
-                                width={75}
+                                width={85}
+                                label={{ 
+                                  value: targetInfo.unit || 'Score / Rate', 
+                                  angle: -90, 
+                                  position: 'insideLeft', 
+                                  offset: 0,
+                                  style: { textAnchor: 'middle', fill: '#475569', fontSize: 11, fontWeight: 600 } 
+                                }}
                               />
                               <Tooltip content={<CustomTooltip unit={targetInfo.unit} />} />
                               <Legend verticalAlign="top" height={36} iconType="circle" />
@@ -747,15 +802,15 @@ export default function GoalPage() {
                               {/* 2030 Regression Forecast Dashed Line */}
                               <Line name="Statistical Trend Forecast (2030)" type="monotone" dataKey="predictedValue" stroke="#8b5cf6" strokeWidth={2.5} strokeDasharray="5 5" connectNulls={true} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: '#7c3aed', strokeWidth: 2 }} />
                               
-                              {/* Official UN 2030 Target Reference Line */}
-                              {targetInfo.benchmarkValue !== null && (
+                              {/* Official UN 2030 Target Reference Line (Rendered for all targets and countries) */}
+                              {targetInfo.benchmarkValue !== null && targetInfo.benchmarkValue !== undefined && (
                                 <ReferenceLine 
                                   y={targetInfo.benchmarkValue} 
                                   stroke="#e11d48" 
                                   strokeDasharray="4 4" 
                                   strokeWidth={1.75}
                                   label={{ 
-                                    value: targetInfo.benchmarkLabel || 'UN 2030 Benchmark', 
+                                    value: targetInfo.benchmarkLabel || 'UN 2030 Target', 
                                     fill: '#e11d48', 
                                     fontSize: 10, 
                                     fontWeight: 700, 

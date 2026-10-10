@@ -47,7 +47,8 @@ async def generate_narrative(stats: dict) -> str:
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "google/gemma-4-26b-a4b-it:free",
+                    "model": "openrouter/auto",
+                    "models": ["openrouter/auto", "deepseek/deepseek-chat", "nvidia/nemotron-3.5-lightning:free"],
                     "messages": [
                         {
                             "role": "system",

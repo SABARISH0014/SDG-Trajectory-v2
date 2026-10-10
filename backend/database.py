@@ -531,3 +531,234 @@ async def clear_admin_audit_logs() -> bool:
             logger.debug(f"Failed to clear Turso audit logs table: {e}")
     return True
 
+# -------------------------------------------------------------
+# Dynamic Loading Tips, Facts & Trivia Engine
+# -------------------------------------------------------------
+DEFAULT_TRIVIA_ITEMS = [
+    {
+        "id": 1,
+        "category": "SDG Fact",
+        "text": "Over 2 billion people worldwide still lack safely managed drinking water services (SDG 6).",
+        "icon": "Droplet",
+        "is_active": 1
+    },
+    {
+        "id": 2,
+        "category": "Website Tip",
+        "text": "You can simulate policy accelerations up to 2.0x on any indicator in the What-If Policy Simulator!",
+        "icon": "Sliders",
+        "is_active": 1
+    },
+    {
+        "id": 3,
+        "category": "UN Trivia",
+        "text": "The 17 SDGs were adopted unanimously by all 193 UN Member States in September 2015 as part of the 2030 Agenda.",
+        "icon": "Globe",
+        "is_active": 1
+    },
+    {
+        "id": 4,
+        "category": "Website Tip",
+        "text": "Click 'Executive Briefing (PDF)' on any trajectory to export an official, board-ready 1-page dossier.",
+        "icon": "FileText",
+        "is_active": 1
+    },
+    {
+        "id": 5,
+        "category": "SDG Fact",
+        "text": "Renewable energy must expand three times faster than current rates to achieve universal clean energy by 2030 (SDG 7).",
+        "icon": "Zap",
+        "is_active": 1
+    },
+    {
+        "id": 6,
+        "category": "Website Tip",
+        "text": "Interact with the 3D globe on the homepage: click any nation to view its complete 17-Goal development breakdown.",
+        "icon": "Compass",
+        "is_active": 1
+    },
+    {
+        "id": 7,
+        "category": "SDG Fact",
+        "text": "Global greenhouse gas emissions must drop by 43% by 2030 to limit global warming to 1.5°C (SDG 13).",
+        "icon": "Flame",
+        "is_active": 1
+    },
+    {
+        "id": 8,
+        "category": "Website Tip",
+        "text": "Use the Country Benchmarking tool to compare development trajectories of any two countries side-by-side.",
+        "icon": "Scale",
+        "is_active": 1
+    },
+    {
+        "id": 9,
+        "category": "UN Trivia",
+        "text": "The 2030 Agenda encompasses 169 quantitative targets tracked by over 230 multilateral indicators.",
+        "icon": "Target",
+        "is_active": 1
+    },
+    {
+        "id": 10,
+        "category": "Website Tip",
+        "text": "Need customized policy recommendations? Open the AI Policy Copilot on the bottom right for instant tailored insights.",
+        "icon": "Sparkles",
+        "is_active": 1
+    },
+    {
+        "id": 11,
+        "category": "SDG Fact",
+        "text": "Over 700 million people still live in extreme poverty worldwide, subsisting on less than $2.15 a day (SDG 1).",
+        "icon": "Users",
+        "is_active": 1
+    },
+    {
+        "id": 12,
+        "category": "UN Trivia",
+        "text": "The UN General Assembly Hall in New York was designed by an international team including Le Corbusier and Oscar Niemeyer.",
+        "icon": "Building",
+        "is_active": 1
+    }
+]
+
+_trivia_initialized = False
+
+async def init_trivia_table():
+    global _trivia_initialized
+    if _trivia_initialized:
+        return
+    url, token = get_turso_credentials()
+    if not url or not token:
+        return
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            await client.execute('''
+                CREATE TABLE IF NOT EXISTS trivia_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    icon TEXT DEFAULT 'Sparkles',
+                    is_active INTEGER DEFAULT 1,
+                    created_at TEXT
+                )
+            ''')
+            rs = await client.execute("SELECT COUNT(*) FROM trivia_items")
+            if rs.rows and rs.rows[0][0] == 0:
+                for item in DEFAULT_TRIVIA_ITEMS:
+                    now_str = datetime.now(timezone.utc).isoformat()
+                    await client.execute(
+                        "INSERT INTO trivia_items (category, text, icon, is_active, created_at) VALUES (?, ?, ?, ?, ?)",
+                        [item["category"], item["text"], item.get("icon", "Sparkles"), 1, now_str]
+                    )
+            _trivia_initialized = True
+    except Exception as e:
+        logger.error(f"Failed to initialize trivia_items table: {e}")
+
+async def get_active_trivia() -> list[dict]:
+    await init_trivia_table()
+    url, token = get_turso_credentials()
+    if not url or not token:
+        return DEFAULT_TRIVIA_ITEMS
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            rs = await client.execute("SELECT id, category, text, icon, is_active, created_at FROM trivia_items WHERE is_active = 1 ORDER BY id ASC")
+            if rs.rows:
+                return [
+                    {
+                        "id": row[0],
+                        "category": str(row[1]),
+                        "text": str(row[2]),
+                        "icon": str(row[3]) if row[3] else "Sparkles",
+                        "is_active": int(row[4]),
+                        "created_at": str(row[5]) if row[5] else ""
+                    }
+                    for row in rs.rows
+                ]
+            return DEFAULT_TRIVIA_ITEMS
+    except Exception as e:
+        logger.error(f"Failed to fetch active trivia: {e}")
+        return DEFAULT_TRIVIA_ITEMS
+
+async def get_all_trivia() -> list[dict]:
+    await init_trivia_table()
+    url, token = get_turso_credentials()
+    if not url or not token:
+        return DEFAULT_TRIVIA_ITEMS
+    try:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            rs = await client.execute("SELECT id, category, text, icon, is_active, created_at FROM trivia_items ORDER BY id DESC")
+            if rs.rows:
+                return [
+                    {
+                        "id": row[0],
+                        "category": str(row[1]),
+                        "text": str(row[2]),
+                        "icon": str(row[3]) if row[3] else "Sparkles",
+                        "is_active": int(row[4]),
+                        "created_at": str(row[5]) if row[5] else ""
+                    }
+                    for row in rs.rows
+                ]
+            return DEFAULT_TRIVIA_ITEMS
+    except Exception as e:
+        logger.error(f"Failed to fetch all trivia: {e}")
+        return DEFAULT_TRIVIA_ITEMS
+
+async def add_trivia_item(category: str, text: str, icon: str = "Sparkles") -> dict:
+    await init_trivia_table()
+    url, token = get_turso_credentials()
+    now_str = datetime.now(timezone.utc).isoformat()
+    if url and token:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            rs = await client.execute(
+                "INSERT INTO trivia_items (category, text, icon, is_active, created_at) VALUES (?, ?, ?, 1, ?) RETURNING id",
+                [category, text, icon, now_str]
+            )
+            item_id = rs.rows[0][0] if rs.rows else 1
+            return {"id": item_id, "category": category, "text": text, "icon": icon, "is_active": 1, "created_at": now_str}
+    return {"id": int(time.time()), "category": category, "text": text, "icon": icon, "is_active": 1, "created_at": now_str}
+
+async def update_trivia_item(item_id: int, category: str, text: str, icon: str, is_active: int) -> bool:
+    await init_trivia_table()
+    url, token = get_turso_credentials()
+    if url and token:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            await client.execute(
+                "UPDATE trivia_items SET category = ?, text = ?, icon = ?, is_active = ? WHERE id = ?",
+                [category, text, icon, is_active, item_id]
+            )
+            return True
+    return False
+
+async def delete_trivia_item(item_id: int) -> bool:
+    await init_trivia_table()
+    url, token = get_turso_credentials()
+    if url and token:
+        async with libsql_client.create_client(url, auth_token=token) as client:
+            await client.execute("DELETE FROM trivia_items WHERE id = ?", [item_id])
+            return True
+    return False
+
+async def get_loading_screen_config() -> dict:
+    interval = await get_system_config("loading_trivia_interval", 3.5)
+    categories_str = await get_system_config_str("loading_trivia_categories", "Website Tip,SDG Fact,UN Trivia")
+    spinner_style = await get_system_config_str("loading_spinner_style", "sdg_ring")
+    
+    categories = [c.strip() for c in categories_str.split(",") if c.strip()]
+    if not categories:
+        categories = ["Website Tip", "SDG Fact", "UN Trivia"]
+        
+    return {
+        "rotation_interval": float(interval) if interval else 3.5,
+        "active_categories": categories,
+        "spinner_style": spinner_style or "sdg_ring"
+    }
+
+async def set_loading_screen_config(interval: float, active_categories: list[str], spinner_style: str = "sdg_ring") -> bool:
+    safe_interval = max(2.0, min(15.0, float(interval)))
+    await set_system_config("loading_trivia_interval", safe_interval)
+    cats_str = ",".join(active_categories) if active_categories else "Website Tip,SDG Fact,UN Trivia"
+    await set_system_config_str("loading_trivia_categories", cats_str)
+    await set_system_config_str("loading_spinner_style", spinner_style or "sdg_ring")
+    return True
+

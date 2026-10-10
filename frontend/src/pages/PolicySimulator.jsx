@@ -2,11 +2,12 @@ import { API_BASE_URL } from '@/config';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { SlidersHorizontal, Play, Info, Sparkles, BookOpen, HelpCircle, Loader2, Home, ChevronRight, Globe2 } from 'lucide-react';
+import { SlidersHorizontal, Play, Info, Sparkles, BookOpen, HelpCircle, Loader2, Home, ChevronRight, Globe2, Clock } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Button } from '../components/ui/Button';
 import ExportDossierButton from '../components/ExportDossierButton';
 import SplashScreenOverlay from '../components/SplashScreenOverlay';
+import LoadingTriviaCard from '../components/LoadingTriviaCard';
 import { TARGETS, COUNTRIES } from '../lib/constants';
 import { getTargetDetails, generateDynamicLaymanInsight, formatMetricValue } from '../data/sdgTargetsData';
 import {
@@ -139,6 +140,13 @@ export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
     return getTargetDetails(selectedTarget, effectiveGoalNumber);
   }, [selectedTarget, effectiveGoalNumber]);
 
+  const lastUpdatedYear = useMemo(() => {
+    if (!data) return null;
+    const hist = data.filter(d => d.actualValue !== null && d.actualValue !== undefined);
+    if (hist.length === 0) return null;
+    return hist[hist.length - 1].Year;
+  }, [data]);
+
   const handleSimulate = async () => {
     setLoading(true);
     try {
@@ -213,13 +221,6 @@ export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
       setLoading(false);
     }
   };
-
-  // Auto-run simulation on initial load if standalone
-  useEffect(() => {
-    if (!isEmbedded && !data) {
-      handleSimulate();
-    }
-  }, []);
 
   const getMultiplierLabel = (val) => {
     if (val === 1.0) return "Baseline Pace (1.0x)";
@@ -338,6 +339,20 @@ export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
           </div>
         </div>
 
+        {/* Requirement 4: Last updated year status line */}
+        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 gap-2">
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <span>
+              Official data reporting for <strong className="text-slate-800 font-semibold">{COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry}</strong> (Target <strong className="text-slate-800 font-semibold">{selectedTarget}</strong>):
+            </span>
+          </div>
+          <span className="inline-flex items-center gap-1.5 font-semibold text-navy bg-slate-100 px-3 py-1 rounded-full border border-slate-200 text-xs self-start sm:self-auto">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            {lastUpdatedYear ? `Latest reported data: ${lastUpdatedYear}` : 'Latest reported data: 2024'}
+          </span>
+        </div>
+
         {/* Policy Multiplier Simple Description */}
         <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-md text-xs text-slate-600 flex items-start gap-2.5">
           <HelpCircle className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
@@ -352,12 +367,11 @@ export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
 
       {/* Chart & Insights */}
       {loading ? (
-        <>
-          <SplashScreenOverlay message="Simulating Policy Trajectory..." />
-          <div className="border border-slate-200 bg-white p-6 rounded-lg shadow-sm">
-            <Skeleton className="w-full h-[350px]" />
-          </div>
-        </>
+        <LoadingTriviaCard 
+          message="Simulating Policy Trajectory Scenario..."
+          submessage={`Scaling linear regression slope by ${policyMultiplier.toFixed(1)}x across 2030 milestones`}
+          isScoped={true}
+        />
       ) : data && data.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
@@ -365,14 +379,9 @@ export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
           <div id="policy-simulator-chart-container" className="lg:col-span-2 border border-slate-200 bg-white p-6 rounded-lg shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-slate-100 gap-2">
               <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-lg font-serif font-semibold text-warm-gray">
-                    Policy Scenario Trajectory (2015–2030)
-                  </h4>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                    Y-Axis: {targetInfo.unit}
-                  </span>
-                </div>
+                <h4 className="text-lg font-serif font-semibold text-warm-gray">
+                  Policy Scenario Trajectory (2015–2030)
+                </h4>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Comparing baseline historical trajectory against simulated policy multiplier ({policyMultiplier.toFixed(1)}x).
                 </p>
@@ -382,6 +391,24 @@ export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
                   Scenario: {simulatedStatus}
                 </Badge>
               )}
+            </div>
+
+            {/* Axes units indicator above chart */}
+            <div className="flex items-center justify-between text-xs text-slate-500 mb-2 px-1">
+              <div className="inline-flex items-center gap-2.5 bg-slate-50 border border-slate-200/80 px-3 py-1 rounded-md text-slate-700 font-medium flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">X-Axis Unit:</span>
+                  <span className="font-bold text-navy">Year</span>
+                </div>
+                <span className="text-slate-300">|</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Y-Axis Unit:</span>
+                  <span className="font-bold text-navy">{targetInfo.unit || 'Score / Rate'}</span>
+                </div>
+              </div>
+              <div className="text-[11px] text-slate-400 font-medium">
+                Simulated {policyMultiplier.toFixed(1)}x Multiplier
+              </div>
             </div>
 
             <div className="h-[340px] w-full">
@@ -405,21 +432,28 @@ export default function PolicySimulator({ goalNumber, isEmbedded = false }) {
                       dataMin => (dataMin >= 0 ? Math.max(0, dataMin - (dataMin * 0.05)) : dataMin - (Math.abs(dataMin) * 0.05)),
                       dataMax => dataMax + (Math.abs(dataMax) * 0.05)
                     ]}
-                    width={65}
+                    width={80}
+                    label={{ 
+                      value: targetInfo.unit || 'Score / Rate', 
+                      angle: -90, 
+                      position: 'insideLeft', 
+                      offset: 0,
+                      style: { textAnchor: 'middle', fill: '#475569', fontSize: 11, fontWeight: 600 } 
+                    }}
                   />
                   <Tooltip content={<CustomTooltip unit={targetInfo.unit} />} />
                   <Legend verticalAlign="top" height={36} iconType="circle" />
                   <Line name="Historical Baseline" type="monotone" dataKey="actualValue" stroke="#1B2A4A" strokeWidth={2.5} connectNulls={true} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} />
                   <Line name={`Simulated Policy Trajectory (${policyMultiplier.toFixed(1)}x)`} type="monotone" dataKey="predictedValue" stroke="#10b981" strokeWidth={2.5} strokeDasharray="5 5" connectNulls={true} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, stroke: '#059669', strokeWidth: 2 }} />
                   
-                  {targetInfo.benchmarkValue !== null && (
+                  {targetInfo.benchmarkValue !== null && targetInfo.benchmarkValue !== undefined && (
                     <ReferenceLine 
                       y={targetInfo.benchmarkValue} 
                       stroke="#e11d48" 
                       strokeDasharray="4 4" 
                       strokeWidth={1.75}
                       label={{ 
-                        value: targetInfo.benchmarkLabel || 'UN 2030 Benchmark', 
+                        value: targetInfo.benchmarkLabel || 'UN 2030 Target', 
                         fill: '#e11d48', 
                         fontSize: 10, 
                         fontWeight: 700, 
